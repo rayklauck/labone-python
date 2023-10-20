@@ -18,6 +18,19 @@ from tests.nodetree.test_node import get_serverless_tree
 
 
 class TestNodeInfo:
+<<<<<<< HEAD
+=======
+    #     @staticmethod
+    #     def test_prop_not_existing():
+    #
+    #
+    #         with pytest.raises(KeyError):
+    #             node.node_info.writeable
+    #
+    #         with pytest.raises(KeyError):
+    #             node.node_info.is_settings
+
+>>>>>>> 331ea4a (creating nodetree)
     @staticmethod
     def test_node_info():
         zi = get_serverless_tree()
