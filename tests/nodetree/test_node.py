@@ -24,10 +24,10 @@ from labone.nodetree.node import (
 from tests.nodetree.conftest import (
     device_id,
     device_structure,
-    get_result_node,
-    get_serverless_manager,
-    get_serverless_tree,
-    get_tree,
+    result_node,
+    sessionless_manager,
+    zi,
+    session_zi,
     zi_get_responses_prop,
     zi_structure,
 )
@@ -35,8 +35,8 @@ from tests.nodetree.conftest import (
 
 class TestMetaNode:
     @staticmethod
-    def test_is_child_node():
-        for node in [get_result_node(), get_serverless_tree()]:
+    def test_is_child_node(result_node, zi):
+        for node in [result_node, zi]:
             for subnode in node:
                 if isinstance(subnode, node.__class__):
                     assert node.is_child_node(subnode)
@@ -53,8 +53,7 @@ class TestFindSubstructure:
             (("zi", "config", "open")),
         ],
     )
-    def test_valid_accesses(path_segments):
-        zi = get_serverless_tree()
+    def test_valid_accesses(path_segments, zi):
         main_structure = zi_structure.structure
         structure = zi.tree_manager.find_substructure(path_segments)
 
@@ -63,8 +62,7 @@ class TestFindSubstructure:
         )
 
     @staticmethod
-    def test_wrong_accesses():
-        zi = get_serverless_tree()
+    def test_wrong_accesses(zi):
         with pytest.raises(LabOneInvalidPathError):
             zi.tree_manager.find_substructure(("zi", "config", "open", "too_long"))
         with pytest.raises(LabOneInvalidPathError):
@@ -73,8 +71,7 @@ class TestFindSubstructure:
             zi.tree_manager.find_substructure(("*",))
 
     @staticmethod
-    def test_repeated_access():
-        zi = get_serverless_tree()
+    def test_repeated_access(zi):
         node = zi.config
         access1 = zi.tree_manager.find_substructure(node.path_segments)
         access2 = zi.tree_manager.find_substructure(node.path_segments)
@@ -85,8 +82,7 @@ class TestFindSubstructure:
 
 class TestNodetreeManager:
     @staticmethod
-    def test_raw_path_to_node():
-        zi = get_serverless_tree()
+    def test_raw_path_to_node(zi):
         manager = zi.tree_manager
         node = manager.raw_path_to_node("/zi/config")
 
@@ -94,8 +90,7 @@ class TestNodetreeManager:
         assert set(node.subtree_structure.keys()) == {"open", "port"}
 
     @staticmethod
-    def test_path_segments_to_node():
-        zi = get_serverless_tree()
+    def test_path_segments_to_node(zi):
         manager = zi.tree_manager
         node = manager.path_segments_to_node(("zi", "config"))
 
@@ -121,16 +116,14 @@ class TestNodetreeManager:
         assert manager.paths == zi_structure.paths
 
 
-def test_repr():
-    manager = get_serverless_manager()
+def test_repr(sessionless_manager):
     for path in ["zi", "zi/config", "zi/config/open", "zi/*/open"]:
-        node = manager.raw_path_to_node(path)
+        node = sessionless_manager.raw_path_to_node(path)
         assert path in repr(node)  # path should be contained in repr and str
         assert path in str(node)
 
 
-def test_deprecated():
-    zi = get_serverless_tree()
+def test_deprecated(zi):
     with pytest.warns(DeprecationWarning):
         _ = zi.raw_tree
 
@@ -138,46 +131,40 @@ def test_deprecated():
         assert zi.raw_tree == zi.path_segments
 
 
-def test_dir():
-    zi = get_serverless_tree()
+def test_dir(zi):
     assert "config" in dir(zi)
 
 
 class TestResultNode:
     @staticmethod
-    def test_generate_subnode():
-        r = get_result_node()
-        sub_node = r["config/open"]
-        assert sub_node == r.config.open
+    def test_generate_subnode(result_node):
+        sub_node = result_node["config/open"]
+        assert sub_node == result_node.config.open
 
     @staticmethod
-    def test_generate_subnode_invalid():
-        result_node = get_result_node()
+    def test_generate_subnode_invalid(result_node):
         with pytest.raises(LabOneInvalidPathError):
             _ = result_node.invalid
 
     @staticmethod
-    def test_leaf_values():
-        result = get_result_node()
-        assert result.config.port.value == 8004
-        assert result.debug.level.value == 3
+    def test_leaf_values(result_node):
+        assert result_node.config.port.value == 8004
+        assert result_node.debug.level.value == 3
 
     @staticmethod
-    def test_getitem_too_deep():
-        result_node = get_result_node()
+    def test_getitem_too_deep(result_node):
         with pytest.raises(LabOneInvalidPathError):
             result_node["config/open/too/long"]
 
     @staticmethod
-    def test_str_repr():
-        result_node = get_result_node()
+    def test_str_repr(result_node):
         assert isinstance(repr(result_node), str)
         assert isinstance(str(result_node), str)
 
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_pickling():
-        zi = await get_tree()
+    async def test_pickling(session_zi):
+        zi = await session_zi
         result_node = await zi.debug.level()
 
         buffer = BytesIO()
@@ -189,13 +176,11 @@ class TestResultNode:
         assert unpickled_obj == result_node
 
     @staticmethod
-    def test_dir():
-        result_node = get_result_node()
+    def test_dir(result_node):
         assert "config" in dir(result_node)
 
     @staticmethod
-    def test_contains():
-        result_node = get_result_node()
+    def test_contains(result_node):
         assert "config" in result_node
         assert result_node.config in result_node
 
@@ -205,31 +190,26 @@ class TestResultNode:
         assert subnode.level in subnode
 
     @staticmethod
-    def test_wildcard():
-        result_node = get_result_node()
+    def test_wildcard(result_node):
         with pytest.raises(LabOneInvalidPathError):
             result_node["*"]
 
     @staticmethod
-    def test_not_callable():
-        result_node = get_result_node()
+    def test_not_callable(result_node):
         with pytest.raises(LabOneInappropriateNodeTypeError):
             result_node()
 
 
 class TestNode:
     @staticmethod
-    def test_str_repr():
-        zi = get_serverless_tree()
-
+    def test_str_repr(zi):
         # test callable
         assert isinstance(repr(zi), str)
         assert isinstance(str(zi), str)
 
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_eq():
-        zi = get_serverless_tree()
+    async def test_eq(zi, session_zi):
         node1 = zi.config
 
         assert zi.config.port == zi.config.port
@@ -238,25 +218,23 @@ class TestNode:
         assert zi != node1
         assert zi.config.port != zi.config.open
 
-        other_trees_zi = await get_tree()
+        other_trees_zi = await session_zi
         assert zi != other_trees_zi
         assert zi.path == other_trees_zi.path
 
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_hash():
-        zi = get_serverless_tree()
+    async def test_hash(zi, session_zi):
         node1 = zi.config
 
         assert hash(zi) == hash(zi)
         assert hash(zi) != hash(node1)
 
-        other_trees_zi = await get_tree()
+        other_trees_zi = await session_zi
         assert hash(zi) != hash(other_trees_zi)
 
     @staticmethod
-    def test_contains():
-        zi = get_serverless_tree()
+    def test_contains(zi):
         assert "config" in zi
         assert zi.config in zi
 
@@ -266,17 +244,15 @@ class TestNode:
             assert child in node1
 
     @staticmethod
-    def test_keyword_handling():
-        zi = get_serverless_tree()
-
+    def test_keyword_handling(zi):
         # use unchecked wildcard-paths for testing keywords
         node = zi["*"].in_.if_
         assert node.path_segments == ("zi", "*", "in", "if")
 
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_get():
-        zi = await get_tree()
+    async def test_get(session_zi):
+        zi = await session_zi
         result = await zi.config.port()
         assert result.value == 8004
 
@@ -285,8 +261,8 @@ class TestNode:
 
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_set():
-        zi = await get_tree()
+    async def test_set(session_zi):
+        zi = await session_zi
         result = await zi.config.port("uvw")
         assert result.value == "uvw"
 
@@ -294,9 +270,7 @@ class TestNode:
         assert result.value == "klm"
 
     @staticmethod
-    def test_dir():
-        zi = get_serverless_tree()
-
+    def test_dir(zi):
         for extension in ["visible", "connected"]:
             assert pythonify_path_segment(extension) in zi.devices.__dir__()
 
@@ -306,8 +280,8 @@ class TestNode:
 
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_wait_for_change_state_loop():
-        zi = await get_tree()
+    async def test_wait_for_change_state_loop(session_zi):
+        zi = await session_zi
         queue: DataQueue = await zi.debug.level.subscribe()
 
         async def wait_and_set(time, value):
@@ -335,30 +309,26 @@ class TestNode:
 
 class TestLeafNode:
     @staticmethod
-    def test_try_generate_subnode():
-        zi = get_serverless_tree()
+    def test_try_generate_subnode(zi):
         leaf = zi.debug.level
         with pytest.raises(LabOneInvalidPathError):
             leaf.try_generate_subnode(next_path_segment="any")
 
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_subscribe():
-        zi = await get_tree()
+    async def test_subscribe(session_zi):
+        zi = await session_zi
         queue = await zi.debug.level.subscribe()
         assert isinstance(queue, DataQueue)
 
     @staticmethod
-    def test_node_info():
-        zi = get_serverless_tree()
+    def test_node_info(zi):
         assert isinstance(zi.debug.level.node_info, NodeInfo)
 
 
 class TestPartialNode:
     @staticmethod
-    def test_package_get_response():
-        zi = get_serverless_tree()
-
+    def test_package_get_response(zi):
         node = zi.config
         # answer to '/zi/config',
         # (make use of fact that all leafs are direct children of '/zi/config')
@@ -371,15 +341,13 @@ class TestPartialNode:
         assert result_node.path == node.path
 
     @staticmethod
-    def test_wrong_subnode():
-        zi = get_serverless_tree()
+    def test_wrong_subnode(zi):
         with pytest.raises(LabOneInvalidPathError):
             _ = zi.not_existing
 
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_wait_for_state_change():
-        zi = get_serverless_tree()
+    async def test_wait_for_state_change(zi):
         with pytest.raises(LabOneInappropriateNodeTypeError):
             await zi.wait_for_state_change(value=1, timeout=0.1)
 
@@ -387,16 +355,17 @@ class TestPartialNode:
 class TestWildcardPartialNode:
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_get():
-        zi = await get_tree()
+    async def test_get(session_zi):
+        zi = await session_zi
         result = await zi["*"]()
         assert isinstance(result, ResultNode)
 
 
 class TestWildcardNode:
     @staticmethod
-    def test_package_get_response():
-        device = get_serverless_tree(nodes_to_info=device_structure.nodes_to_info)
+    @pytest.mark.nodes_to_info(device_structure.nodes_to_info)
+    def test_package_get_response(zi):
+        device = zi
         node = device.oscs["*"].freq
         # example answer to wildcard get-request
         response = [
@@ -419,17 +388,14 @@ class TestWildcardNode:
                 assert value_or_node.path in expected_paths
 
     @staticmethod
-    def test_subindexing():
-        zi = get_serverless_tree()
-
+    def test_subindexing(zi):
         # no error
         node = zi["*"].whatever.you.want
         assert isinstance(node, WildcardNode)
 
-    @staticmethod
     @pytest.mark.asyncio()
-    async def test_get():
-        zi = await get_tree()
+    async def test_get(self, session_zi):
+        zi = await session_zi
         node = zi["*"].level
 
         # already correct value
@@ -440,8 +406,8 @@ class TestWildcardNode:
 
     @staticmethod
     @pytest.mark.asyncio()
-    async def test_set():
-        zi = await get_tree()
+    async def test_set(session_zi):
+        zi = await session_zi
         node = zi["*"].level
 
         await node(3)

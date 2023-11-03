@@ -184,6 +184,15 @@ def test_streaming_handle_with_parser_callback():
     )
 
 
+def test_streaming_handle_with_invalid_parser_callback():
+    with pytest.raises(TypeError):
+        StreamingHandle(parser_callback=10)
+
+def test_streaming_handle_with_exception_parser_callback():
+    with pytest.raises(TypeError):
+        StreamingHandle(parser_callback=lambda x: RuntimeError)
+
+
 @pytest.mark.asyncio()
 async def test_streaming_handle_update_empty():
     streaming_handle = StreamingHandle()

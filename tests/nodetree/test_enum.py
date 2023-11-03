@@ -1,6 +1,4 @@
-import pickle
 from enum import Enum
-from io import BytesIO
 
 import pytest
 from labone.core import AnnotatedValue
@@ -15,25 +13,14 @@ from tests.nodetree.conftest import (
     zi_structure,
 )
 from tests.nodetree.test_node import get_serverless_tree
+from tests.nodetree.conftest import zi_structure, zi
+#from tests.nodetree.conftest import sessionless_tree
 
 
 class TestNodeInfo:
-<<<<<<< HEAD
-=======
-    #     @staticmethod
-    #     def test_prop_not_existing():
-    #
-    #
-    #         with pytest.raises(KeyError):
-    #             node.node_info.writeable
-    #
-    #         with pytest.raises(KeyError):
-    #             node.node_info.is_settings
 
->>>>>>> 331ea4a (creating nodetree)
     @staticmethod
-    def test_node_info():
-        zi = get_serverless_tree()
+    def test_node_info(zi):
         path = zi.debug.level.path
         info = NodeInfo(zi.tree_manager.path_to_info[path], path)
         assert isinstance(info, NodeInfo)
