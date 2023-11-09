@@ -25,10 +25,6 @@ from labone.nodetree.node import (
 from tests.nodetree.conftest import (
     device_id,
     device_structure,
-    get_result_node,
-    get_serverless_manager,
-    get_serverless_tree,
-    get_tree,
     zi_get_responses_prop,
     zi_structure,
 )
@@ -92,7 +88,7 @@ class TestNodetreeManager:
         node = manager.raw_path_to_node("/zi/config")
 
         assert node == zi.config
-        assert set(node.subtree_structure.keys()) == {"open", "port"}
+        assert set(node.subtree_paths.keys()) == {"open", "port"}
 
     @staticmethod
     def test_path_segments_to_node():
@@ -101,7 +97,7 @@ class TestNodetreeManager:
         node = manager.path_segments_to_node(("zi", "config"))
 
         assert node == zi.config
-        assert set(node.subtree_structure.keys()) == {"open", "port"}
+        assert set(node.subtree_paths.keys()) == {"open", "port"}
 
     @staticmethod
     def test_hide_prefix():
@@ -318,7 +314,7 @@ class TestNode:
             assert pythonify_path_segment(extension) in zi.devices.__dir__()
 
         for node in [zi, zi.devices, zi.mds.groups[0], zi.clockbase]:
-            for extension in node.subtree_structure:
+            for extension in node.subtree_paths:
                 assert pythonify_path_segment(extension) in node.__dir__()
 
     @staticmethod
@@ -469,3 +465,16 @@ class TestWildcardNode:
         node = zi["*"].level
 
         await node(3)
+
+
+
+
+
+
+
+
+
+
+
+
+
