@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 VERSION_LENGTH = 3
 
 
-class BaseInstrument(PartialNode):
+class Instrument(PartialNode):
     """Generic toolkit driver for a Zurich Instrument device.
 
     All device specific class are derived from this class.

@@ -12,7 +12,7 @@ from labone.nodetree.enum import get_default_enum_parser
 from labone.nodetree.node import Node, NodeTreeManager
 
 
-class Session:
+class DataServer:
     """High-level functionality for connecting to devices and zi servers."""
 
     def __init__(self, host: str, port: int):
