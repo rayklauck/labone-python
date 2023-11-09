@@ -4,23 +4,64 @@ from __future__ import annotations
 import typing as t
 from functools import partial
 
-from labone.core import DeviceKernelInfo, KernelSession, ServerInfo, ZIKernelInfo, \
-    AnnotatedValue
-from labone.devices import BaseInstrument
+from labone.core import (
+    DeviceKernelInfo,
+    KernelSession,
+    ServerInfo,
+    ZIKernelInfo,
+    AnnotatedValue,
+)
+from labone.devices import Instrument
 from labone.nodetree import construct_nodetree
-from labone.nodetree.enum import get_default_enum_parser
-from labone.nodetree.node import Node, NodeTreeManager
+from labone.nodetree.node import Node, NodeTreeManager, PartialNode
 
 
-class DataServer:
+class DataServer(PartialNode):
     """High-level functionality for connecting to devices and zi servers."""
 
-    def __init__(self, host: str, port: int):
+    def __init__(
+        self,
+        host: str,
+        port: int = 8004,
+        *,
+        model_node: PartialNode,
+    ):
         self.host = host
         self.port = port
         self.server_info = ServerInfo(host=host, port=port)
 
-    async def connect_zi(
+        super().__init__(
+            tree_manager=model_node.tree_manager,
+            path_segments=model_node.path_segments,
+            path_aliases=model_node.path_aliases,
+            subtree_paths=model_node.subtree_paths,
+        )
+
+    @classmethod
+    async def build(
+        cls,
+        host: str,
+        port: int = 8004,
+        *,
+        use_enum_parser: bool = True,
+        custom_parser: t.Callable[[AnnotatedValue], AnnotatedValue] | None = None,
+        hide_kernel_prefix: bool = True,
+    ) -> DataServer:
+        session = await KernelSession.create(
+            kernel_info=ZIKernelInfo(),
+            server_info=ServerInfo(host=host, port=port),
+        )
+
+        model_node = await construct_nodetree(
+            session,
+            hide_kernel_prefix=hide_kernel_prefix,
+            use_enum_parser=use_enum_parser,
+            custom_parser=custom_parser,
+        )
+
+        return DataServer(host, port, model_node=model_node)
+
+    async def _connect_zi(
         self,
         *,
         use_enum_parser: bool = True,
@@ -35,15 +76,7 @@ class DataServer:
             hide_kernel_prefix: Hide the kernel prefix in the nodetree.
                 Default is `True`.
         """
-        session = await KernelSession.create(
-            kernel_info=ZIKernelInfo(),
-            server_info=self.server_info,
-        )
 
-        return await construct_nodetree(session,
-                                        hide_kernel_prefix=hide_kernel_prefix,
-            use_enum_parser=use_enum_parser,
-            custom_parser=custom_parser,)
 
     async def connect_device(
         self,
@@ -54,7 +87,7 @@ class DataServer:
         hide_kernel_prefix: bool = True,
         use_enum_parser: bool = True,
         custom_parser: t.Callable[[AnnotatedValue], AnnotatedValue] | None = None,
-    ) -> BaseInstrument:
+    ) -> Instrument:
         """Connect to a device.
 
         Args:
@@ -75,57 +108,17 @@ class DataServer:
             server_info=self.server_info,
         )
 
-        # construct_nodetree logic
-        path_to_info = await session.list_nodes_info("*")
-
-        if use_enum_parser:
-            parser = get_default_enum_parser(path_to_info)
-        else:
-
-            def parser(x: AnnotatedValue) -> AnnotatedValue:
-                return x  # pragma: no cover
-
-        if custom_parser is not None:
-            def parser(x: AnnotatedValue) -> AnnotatedValue:
-                return custom_parser(parser(x))  # pragma: no cover
-
-        nodetree_manager = NodeTreeManager(
-            session=session,
-            parser=parser,
-            path_to_info=path_to_info,
+        model_node = await construct_nodetree(
+            session,
+            hide_kernel_prefix=hide_kernel_prefix,
+            use_enum_parser=use_enum_parser,
+            custom_parser=custom_parser,
         )
 
-
-        zi_tree = await self.connect_zi(
-                use_enum_parser=use_enum_parser,
-                custom_parser=custom_parser,
-                hide_kernel_prefix=True
-            )
-        # NodetreeManager.construct_nodetree logic
-
-        has_common_prefix = (
-                len(nodetree_manager._partially_explored_structure.keys()) == 1)
-
-
-
-        if not hide_kernel_prefix or not has_common_prefix:
-            return BaseInstrument(serial=serial,
-            device_type="instrument",
-            zi_tree=zi_tree,
-            tree_manager=nodetree_manager,
-            path_segments=(),
-            subtree_paths=nodetree_manager.find_substructure(()),
-            path_aliases=None,
-            )
-
-        common_prefix = (
-            next(iter(nodetree_manager._partially_explored_structure.keys())))
-        return BaseInstrument(
+        return Instrument(
             serial=serial,
             device_type="instrument",
-            zi_tree=zi_tree,
-            tree_manager=nodetree_manager,
-            path_segments=(common_prefix,),
-            subtree_paths=nodetree_manager.find_substructure((common_prefix,)),
-            path_aliases=None,
+            data_server=self,
+            model_node=model_node,
         )
+

@@ -13,18 +13,11 @@ import warnings
 from functools import cached_property
 
 from labone.errors import LabOneError
+
 from labone.nodetree.node import Node, PartialNode
 
 from labone.core.value import AnnotatedValue
 
-from labone.nodetree.helper import UndefinedStructure
-
-if t.TYPE_CHECKING:
-    from labone.nodetree.helper import (  # pragma: no cover
-        NestedDict,
-        NormalizedPathSegment,
-    )
-    from labone.nodetree.node import NodeTreeManager  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
@@ -55,15 +48,8 @@ class Instrument(PartialNode):
         *,
         serial: str,
         device_type: str,
-        zi_tree: Node,
-        tree_manager: NodeTreeManager,
-        path_segments: tuple[NormalizedPathSegment, ...],
-        subtree_paths: NestedDict[list[list[str] | dict]] | UndefinedStructure,
-        path_aliases: dict[
-            tuple[NormalizedPathSegment, ...],
-            tuple[NormalizedPathSegment, ...],
-        ]
-        | None = None,
+        data_server: "DataServer",
+        model_node: Node,
     ):
         self._serial = serial
         self._device_type = device_type
@@ -73,13 +59,13 @@ class Instrument(PartialNode):
             self._options = ""
 
         self._streaming_nodes: list[Node] | None = None
-        self.zi_tree = zi_tree
+        self.data_server = data_server
 
         super().__init__(
-            tree_manager=tree_manager,
-            path_segments=path_segments,
-            subtree_paths=subtree_paths,
-            path_aliases=path_aliases,
+            tree_manager=model_node.tree_manager,
+            path_segments=model_node.path_segments,
+            subtree_paths=model_node.subtree_paths,
+            path_aliases=model_node.path_aliases,
         )
 
     def __repr__(self) -> str:
@@ -88,7 +74,6 @@ class Instrument(PartialNode):
         return str(
             f"{self.__class__.__name__}({self._device_type}{options},{self.serial})",
         )
-
 
     @staticmethod
     def _version_string_to_tuple(version: str) -> tuple[int, int, int]:
