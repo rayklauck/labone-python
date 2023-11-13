@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import typing as t
 from functools import cached_property
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
@@ -22,7 +23,7 @@ from labone.nodetree.node import (
     NodeTreeManager,
     PartialNode,
     ResultNode,
-    WildcardNode,
+    WildcardNode, WildcardOrPartialNode,
 )
 
 if t.TYPE_CHECKING:
@@ -252,6 +253,34 @@ class MockNode(Node):
         return
 
 
+class MockWildcardOrPartialNode(WildcardOrPartialNode):
+    def __init__(self, path_segments):
+        super().__init__(
+            tree_manager=None,
+            path_segments=path_segments,
+            subtree_paths=None,
+            path_aliases=None,
+        )
+
+    def _package_get_response(self, *_, **__):
+        return
+
+    def wait_for_state_change(
+        self,
+        value: int | NodeEnum,
+        *,
+        invert: bool = False,
+        timeout: float = 2,
+    ) -> None:
+        return
+
+    def try_generate_subnode(
+        self,
+        next_path_segment: NormalizedPathSegment,
+    ) -> Node:
+        return
+
+
 class MockPartialNode(PartialNode):
     def __init__(self, path_segments):
         super().__init__(
@@ -280,3 +309,19 @@ class MockWildcardNode(WildcardNode):
             subtree_paths=None,
             path_aliases=None,
         )
+
+
+def _get_future(value):
+    future = asyncio.Future()
+    future.set_result(value)
+    return future
+
+
+@pytest.fixture()
+def mock_path():
+    with patch(
+        "labone.nodetree.node.MetaNode.path",
+        new_callable=PropertyMock,
+        return_value="path",
+    ) as path_patch:
+        yield path_patch

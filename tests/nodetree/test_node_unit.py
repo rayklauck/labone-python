@@ -1,11 +1,12 @@
 import asyncio
+import itertools
 from unittest.mock import MagicMock, Mock, PropertyMock, patch
 
 import pytest
 from labone.core import AnnotatedValue
 from labone.nodetree.errors import (
     LabOneInappropriateNodeTypeError,
-    LabOneInvalidPathError,
+    LabOneInvalidPathError, LabOneNotImplementedError,
 )
 from labone.nodetree.helper import WILDCARD, UndefinedStructure, join_path, split_path
 from labone.nodetree.node import (
@@ -23,7 +24,7 @@ from tests.nodetree.conftest import (
     MockNode,
     MockPartialNode,
     MockResultNode,
-    MockWildcardNode,
+    MockWildcardNode, _get_future, MockWildcardOrPartialNode,
 )
 
 
@@ -43,8 +44,8 @@ class TestMetaNode:
         sub_list = sorted(subtree_structure.keys())
 
         with patch(
-            "labone.nodetree.node.ResultNode.__getitem__",
-            side_effect=[0, 1, 2],
+                "labone.nodetree.node.ResultNode.__getitem__",
+                side_effect=[0, 1, 2],
         ) as patch_getitem:
             for i, subnode in enumerate(result_node):
                 patch_getitem.assert_called_with(sub_list[i])
@@ -91,12 +92,12 @@ class TestMetaNode:
     )
     @pytest.mark.parametrize("as_node", [True, False])
     def test_is_child_node(  # noqa: PLR0913
-        self,
-        as_node,
-        start_path_segments,
-        subtree_structure,
-        test_path_segments,
-        expected,
+            self,
+            as_node,
+            start_path_segments,
+            subtree_structure,
+            test_path_segments,
+            expected,
     ):
         node = MockMetaNode(start_path_segments)
         node._subtree_paths = subtree_structure
@@ -125,8 +126,8 @@ class TestMetaNode:
 class TestResultNode:
     def test_getattr(self, result_node):
         with patch(
-            "labone.nodetree.node.normalize_path_segment",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.normalize_path_segment",
+                side_effect=lambda x: x,
         ) as patch_normalize, patch.object(
             ResultNode,
             "try_generate_subnode",
@@ -156,8 +157,8 @@ class TestResultNode:
         subnode_mock.side_effect = stubs
 
         with patch(
-            "labone.nodetree.node.split_path",
-            side_effect=lambda x: split_path(x),
+                "labone.nodetree.node.split_path",
+                side_effect=lambda x: split_path(x),
         ) as split_patch, patch(
             "labone.nodetree.node.normalize_path_segment",
             side_effect=lambda x: x,
@@ -181,8 +182,8 @@ class TestResultNode:
         subnode_mock.side_effect = [AnnotatedValue(path="next", value=1)]
 
         with patch(
-            "labone.nodetree.node.normalize_path_segment",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.normalize_path_segment",
+                side_effect=lambda x: x,
         ) as normalize_patch, patch(
             "labone.nodetree.node.ResultNode.try_generate_subnode",
             subnode_mock,
@@ -205,8 +206,8 @@ class TestResultNode:
         result_node._subtree_paths = {k: [] for k in keys}
 
         with patch(
-            "labone.nodetree.node.pythonify_path_segment",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.pythonify_path_segment",
+                side_effect=lambda x: x,
         ) as pythonify_mock:
             assert keys <= set(dir(result_node))
             for k in keys:
@@ -227,8 +228,8 @@ class TestResultNode:
         node._subtree_paths = subtree_paths
 
         with patch(
-            "labone.nodetree.node.normalize_path_segment",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.normalize_path_segment",
+                side_effect=lambda x: x,
         ) as normal_patch:
             decision = next_segment in node
             normal_patch.assert_called_once_with(next_segment)
@@ -259,7 +260,7 @@ class TestResultNode:
         path = join_path(next_segment)
 
         with patch(
-            "labone.nodetree.node.ResultNode.is_child_node",
+                "labone.nodetree.node.ResultNode.is_child_node",
         ) as child_patch, patch(
             "labone.nodetree.node.split_path",
             return_value=next_segment,
@@ -306,8 +307,8 @@ class TestResultNode:
     def test_try_generate_subnode(self, result_node):
         segments = ("zi", "next")
         with patch(
-            "labone.nodetree.node.MetaNode._redirect",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.MetaNode._redirect",
+                side_effect=lambda x: x,
         ) as patch_redirect, patch(
             "labone.nodetree.node.ResultNode.__init__",
             return_value=None,
@@ -339,8 +340,8 @@ class TestResultNode:
             self._path_segments = segments
 
         with patch(
-            "labone.nodetree.node.MetaNode._redirect",
-            return_value=segments,
+                "labone.nodetree.node.MetaNode._redirect",
+                return_value=segments,
         ) as patch_redirect, patch.object(
             NodeTreeManager,
             "find_substructure",
@@ -357,13 +358,14 @@ class TestResultNode:
 
             patch_redirect.assert_called_once_with(segments)
             patch_find_structure.assert_called_once_with(segments)
+
             assert deeper == value
 
     def test_try_generate_subnode_invalid(self, result_node):
         segments = ("zi", "next")
         with patch(
-            "labone.nodetree.node.MetaNode._redirect",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.MetaNode._redirect",
+                side_effect=lambda x: x,
         ) as patch_redirect, patch.object(
             NodeTreeManager,
             "find_substructure",
@@ -378,8 +380,8 @@ class TestResultNode:
     def test_try_generate_subnode_wildcard(self, result_node):
         segments = ("zi", WILDCARD)
         with patch(
-            "labone.nodetree.node.MetaNode._redirect",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.MetaNode._redirect",
+                side_effect=lambda x: x,
         ) as patch_redirect, patch.object(
             NodeTreeManager,
             "find_substructure",
@@ -402,8 +404,8 @@ class TestNode:
 
     def test_getattr(self, zi):
         with patch(
-            "labone.nodetree.node.normalize_path_segment",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.normalize_path_segment",
+                side_effect=lambda x: x,
         ) as patch_normalize, patch(
             "labone.nodetree.node.PartialNode.try_generate_subnode",
             side_effect=["subnode"],
@@ -432,8 +434,8 @@ class TestNode:
         subnode_mock.side_effect = stubs
 
         with patch(
-            "labone.nodetree.node.split_path",
-            side_effect=lambda x: split_path(x),
+                "labone.nodetree.node.split_path",
+                side_effect=lambda x: split_path(x),
         ) as split_patch, patch(
             "labone.nodetree.node.normalize_path_segment",
             side_effect=lambda x: x,
@@ -522,8 +524,8 @@ class TestNode:
         node._subtree_paths = {k: [] for k in keys}
 
         with patch(
-            "labone.nodetree.node.pythonify_path_segment",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.pythonify_path_segment",
+                side_effect=lambda x: x,
         ) as pythonify_mock:
             assert keys <= set(dir(node))
             for k in keys:
@@ -558,8 +560,8 @@ class TestNode:
         node._subtree_paths = subtree_paths
 
         with patch(
-            "labone.nodetree.node.normalize_path_segment",
-            side_effect=lambda x: x,
+                "labone.nodetree.node.normalize_path_segment",
+                side_effect=lambda x: x,
         ) as normal_patch:
             decision = next_segment in node
             normal_patch.assert_called_once_with(next_segment)
@@ -658,21 +660,6 @@ class TestNode:
 
 
 class TestLeafNode:
-    @staticmethod
-    def _get_future(value):
-        future = asyncio.Future()
-        future.set_result(value)
-        return future
-
-    @pytest.fixture()
-    def mock_path(self):
-        with patch(
-            "labone.nodetree.node.MetaNode.path",
-            new_callable=PropertyMock,
-            return_value="path",
-        ) as path_patch:
-            yield path_patch
-
     @pytest.mark.asyncio()
     async def test_get(self, mock_path):
         node = MockLeafNode(())
@@ -680,7 +667,7 @@ class TestLeafNode:
         node._tree_manager.session = Mock()
         node._tree_manager.parser = Mock(return_value="parser_response")
         node.tree_manager.session.get = Mock(
-            return_value=self._get_future("get_response"),
+            return_value=_get_future("get_response"),
         )
 
         result = await node._get()
@@ -696,7 +683,7 @@ class TestLeafNode:
         node._tree_manager.session = Mock()
         node._tree_manager.parser = Mock(return_value="parser_response")
         node._tree_manager.session.set = Mock(
-            return_value=self._get_future("set_response"),
+            return_value=_get_future("set_response"),
         )
 
         result = await node._set(value="value")
@@ -718,7 +705,7 @@ class TestLeafNode:
         node._tree_manager.session = Mock()
         node._tree_manager.parser = PropertyMock(return_value="parser")
         node._tree_manager.session.subscribe = Mock(
-            return_value=self._get_future("subscribe_response"),
+            return_value=_get_future("subscribe_response"),
         )
 
         await node.subscribe()
@@ -741,18 +728,18 @@ class TestLeafNode:
     )
     @pytest.mark.asyncio()
     async def test_wait_for_state_change(
-        self,
-        target_value,
-        current_value,
-        invert,
-        expect_early_termination,
+            self,
+            target_value,
+            current_value,
+            invert,
+            expect_early_termination,
     ):
         node = MockLeafNode(())
-        node.subscribe = Mock(return_value=self._get_future("queue"))
-        future = self._get_future(AnnotatedValue(path="path", value=current_value))
+        node.subscribe = Mock(return_value=_get_future("queue"))
+        future = _get_future(AnnotatedValue(path="path", value=current_value))
 
         with patch(
-            "labone.nodetree.node.LeafNode._wait_for_state_change_loop",
+                "labone.nodetree.node.LeafNode._wait_for_state_change_loop",
         ) as loop_patch, patch(
             "labone.nodetree.node.Node.__call__",
             MagicMock(return_value=future),
@@ -775,13 +762,13 @@ class TestLeafNode:
     async def test_wait_for_state_change_timeout(self):
         timeout = 0.02
         node = MockLeafNode(())
-        node.subscribe = Mock(return_value=self._get_future("queue"))
-        future = self._get_future(AnnotatedValue(path="path", value=2))
+        node.subscribe = Mock(return_value=_get_future("queue"))
+        future = _get_future(AnnotatedValue(path="path", value=2))
         node._wait_for_state_change_loop = Mock(return_value=asyncio.sleep(2 * timeout))
 
         with patch(
-            "labone.nodetree.node.Node.__call__",
-            MagicMock(return_value=future),
+                "labone.nodetree.node.Node.__call__",
+                MagicMock(return_value=future),
         ) as call_patch:
             with pytest.raises(asyncio.TimeoutError):
                 await node.wait_for_state_change(value=1, invert=False, timeout=timeout)
@@ -806,17 +793,17 @@ class TestLeafNode:
     )
     @pytest.mark.asyncio()
     async def test_wait_for_state_change_loop(
-        self,
-        target_value,
-        in_pipe,
-        invert,
-        nr_expected_calls,
+            self,
+            target_value,
+            in_pipe,
+            invert,
+            nr_expected_calls,
     ):
         node = MockLeafNode(())
         queue = Mock()
         queue.get = Mock(
             side_effect=[
-                self._get_future(AnnotatedValue(value=i, path="/")) for i in in_pipe
+                _get_future(AnnotatedValue(value=i, path="/")) for i in in_pipe
             ],
         )
         await node._wait_for_state_change_loop(queue, target_value, invert=invert)
@@ -827,9 +814,171 @@ class TestLeafNode:
         node._tree_manager = Mock()
         node._tree_manager.path_to_info = {"path": "this_info"}
         with patch(
-            "labone.nodetree.node.NodeInfo.__init__",
-            return_value=None,
+                "labone.nodetree.node.NodeInfo.__init__",
+                return_value=None,
         ) as node_info_mock:
             node.node_info  # noqa: B018
             mock_path.assert_called_once()
             node_info_mock.assert_called_once_with("this_info")
+
+
+class TestWildCardOrPartialNode:
+    @pytest.mark.asyncio()
+    async def test_get(self, mock_path):
+        node = MockWildcardOrPartialNode(())
+        node._package_get_response = Mock(return_value="package_get_response")
+        node._tree_manager = Mock()
+        node._tree_manager.session = Mock()
+        node.tree_manager.session.get_with_expression = Mock(
+            return_value=_get_future("get_response"),
+        )
+        result = await node._get()
+        mock_path.assert_called_once()
+        node.tree_manager.session.get_with_expression.assert_called_once_with("path")
+        node._package_get_response.assert_called_once_with("get_response")
+        assert result == "package_get_response"
+
+    @pytest.mark.asyncio()
+    async def test_set(self, mock_path):
+        node = MockWildcardOrPartialNode(())
+        node._package_get_response = Mock(return_value="package_get_response")
+        node._tree_manager = Mock()
+        node._tree_manager.session = Mock()
+        node.tree_manager.session.set_with_expression = Mock(
+            return_value=_get_future("get_response"),
+        )
+        result = await node._set('set_value')
+        mock_path.assert_called_once()
+        node.tree_manager.session.set_with_expression.assert_called_once_with(
+            AnnotatedValue(value='set_value', path=node.path)
+        )
+        node._package_get_response.assert_called_once_with("get_response")
+        assert result == "package_get_response"
+
+    @pytest.mark.asyncio()
+    async def test_subscribe_raises(self):
+        with pytest.raises(LabOneNotImplementedError):
+            await MockWildcardOrPartialNode(()).subscribe()
+
+
+class TestWildcardNode:
+
+    @pytest.mark.parametrize(
+        ("path_segments", 'response', 'prefixes', 'have_timestamp'),
+        [
+            (
+                    ("dev1234", "oscs", WILDCARD, "freq"),
+                    [
+                        AnnotatedValue(
+                            value=i * 100,
+                            path=join_path(('dev1234', "oscs", str(i), "freq")),
+                        )
+                        for i in range(8)
+                    ],
+                    [("dev1234", "oscs", str(i), 'freq') for i in range(8)],
+                    False,
+            ),
+            (
+                    (WILDCARD,),
+                    [AnnotatedValue(path=join_path(('a', 'b')), value=9, timestamp=42)],
+                    [('a',)],
+                    True,
+            ),
+            (
+                    (WILDCARD, 'b'),
+                    [
+                        AnnotatedValue(path=join_path(('a', 'b')), value=9),
+                        AnnotatedValue(path=join_path(('c', 'b')), value=23)
+                    ],
+                    [('a', 'b'), ('c', 'b')],
+                    False,
+            ),
+            (
+                    (WILDCARD, 'bound'),
+                    [
+                        AnnotatedValue(path=join_path(('a', 'b', 'x')), value=9),
+                        AnnotatedValue(path=join_path(('c', 'b')), value=23),
+                        AnnotatedValue(path=join_path(('a', 'b', 'z')), value=23)
+                    ],
+                    [('a', 'b'), ('c', 'b')],
+                    False,
+            ),
+            (
+                    (WILDCARD, 'x'),
+                    [],
+                    [],
+                    False,
+            ),
+        ]
+    )
+    def test_package_get_response(self, path_segments, response, prefixes,
+                                  have_timestamp):
+        node = MockWildcardNode(())
+        node._tree_manager = Mock()
+        node._tree_manager.parser = Mock(side_effect=lambda x: x)
+        node._path_segments = path_segments
+
+        def fake_path_segments_to_node(path_segments):
+            mock_node = MockNode(path_segments)
+            mock_node._subtree_paths = 'subtree_paths'
+            return mock_node
+
+        node._tree_manager.path_segments_to_node = Mock(
+            side_effect=fake_path_segments_to_node)
+
+        with patch('uuid.uuid4', return_value=1234) as id_patch:
+            result_node = node._package_get_response(response)
+
+        for r in response:
+            node._tree_manager.parser.assert_any_call(r)
+
+        for p in prefixes:
+            node._tree_manager.path_segments_to_node.assert_any_call(p)
+
+        assert result_node.path_segments == ('matches_1234_id',)
+        assert result_node.tree_manager == node._tree_manager
+        assert result_node._timestamp == (42 if have_timestamp else 0)
+
+        for i, p in enumerate(sorted(prefixes)):
+            assert (('matches_1234_id', str(i)), p) in result_node.path_aliases.items()
+
+        assert result_node._value_structure == {a.path: a for a in response}
+        assert list(result_node._subtree_paths.keys()) == [str(i) for i in
+                                                           range(len(prefixes))]
+        for i in range(len(prefixes)):
+            assert result_node._subtree_paths[str(i)] == 'subtree_paths'
+
+    def test_try_generate_subnode(self):
+        node = MockWildcardNode(('a', 'b'))
+        node._redirect = Mock(side_effect=lambda x: x)
+        node._tree_manager = Mock()
+        node._tree_manager.path_segments_to_node = Mock(return_value='subnode')
+
+        result = node.try_generate_subnode('next')
+
+        node._redirect.assert_called_once_with(('a', 'b', 'next'))
+        node._tree_manager.path_segments_to_node.assert_called_once_with(
+            ('a', 'b', 'next'))
+        assert result == 'subnode'
+
+    @pytest.mark.asyncio()
+    async def test_wait_for_state_change(self, mock_path):
+        node = MockWildcardNode(())
+        node._tree_manager = Mock()
+        wait_mock = Mock(return_value=_get_future('awaited'))
+
+        def fake_raw_path_to_node(path):
+            mock_node = MockNode(tuple(split_path(path)))
+            mock_node.wait_for_state_change = wait_mock
+            return mock_node
+
+        node._tree_manager.raw_path_to_node = Mock(side_effect=fake_raw_path_to_node)
+        node._tree_manager.session = Mock()
+        node._tree_manager.session.list_nodes = Mock(
+            return_value=_get_future(['/a/b', '/a/c']))
+
+        await node.wait_for_state_change(value=1, invert='invert', timeout='timeout')
+
+        node._tree_manager.session.list_nodes.assert_called_once_with('path')
+        assert len(wait_mock.call_args_list) == 2
+        wait_mock.assert_called_with(1, invert='invert', timeout='timeout')
