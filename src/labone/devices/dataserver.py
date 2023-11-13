@@ -38,7 +38,7 @@ class DataServer(PartialNode):
         )
 
     @classmethod
-    async def build(
+    async def create(
         cls,
         host: str,
         port: int = 8004,
@@ -76,7 +76,6 @@ class DataServer(PartialNode):
             hide_kernel_prefix: Hide the kernel prefix in the nodetree.
                 Default is `True`.
         """
-
 
     async def connect_device(
         self,
