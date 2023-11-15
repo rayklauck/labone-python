@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import typing as t
 
-from labone.devices import Instrument
 from labone.core import (
     AnnotatedValue,
     DeviceKernelInfo,
@@ -12,6 +11,7 @@ from labone.core import (
     ZIKernelInfo,
 )
 from labone.errors import LabOneError
+from labone.instrument import Instrument
 from labone.nodetree import construct_nodetree
 from labone.nodetree.node import PartialNode
 
@@ -63,7 +63,9 @@ class DataServer(PartialNode):
                 f"Could not connect to Data Server at {host}:{port}.",
             ) from e
 
-        return DataServer(host, port, model_node=model_node)
+        return DataServer(host, port, model_node=model_node)  # type: ignore
+        # previous type ignore is due to the implicit assumption that a device root
+        # will always be a partial node
 
     async def connect_device(
         self,
@@ -121,3 +123,38 @@ class DataServer(PartialNode):
     def port(self) -> int:
         """Port of the Data Server."""
         return self._port
+
+    async def _check_firmware_update_status(self) -> None:
+        """Check if the firmware matches LabOne version.
+
+        Raises:
+            ConnectionError: If the device is currently updating
+            todo: If the firmware revision does not match to the
+                version of the connected LabOne DataServer.
+        """
+        devices: AnnotatedValue = await self.devices.connected()  # type: ignore
+        device_info = json.loads(devices.value)[self.serial.upper()]  # type: ignore
+        status_flag = device_info["STATUSFLAGS"]
+        if status_flag & 1 << 8:
+            raise ConnectionError(
+                "The device is currently updating please try again after the update "
+                "process is complete",
+            )
+        if status_flag & 1 << 4 or status_flag & 1 << 5:
+            raise LabOneError(
+                "The Firmware does not match the LabOne version. "
+                "Please update the firmware (e.g. in the LabOne UI)",
+            )
+        if status_flag & 1 << 6 or status_flag & 1 << 7:
+            raise LabOneError(
+                "The Firmware does not match the LabOne version. "
+                "Please update LabOne to the latest version from "
+                "https://www.zhinst.com/support/download-center.",
+            )
+
+    async def check_compatibility(self) -> None:
+        """Check if the firmware revision matches the LabOne Data Server version.
+
+        Raises:
+        """
+        await self._check_firmware_update_status()

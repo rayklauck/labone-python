@@ -6,7 +6,10 @@ the device specific nodetree.
 from __future__ import annotations
 
 import logging
+import typing as t
 
+if t.TYPE_CHECKING:
+    from labone.dataserver import DataServer
 from labone.nodetree.node import Node, PartialNode
 
 logger = logging.getLogger(__name__)
@@ -33,7 +36,7 @@ class Instrument(PartialNode):
         self,
         *,
         serial: str,
-        data_server: 'DataServer',
+        data_server: DataServer,
         model_node: Node,
     ):
         self._serial = serial
@@ -57,6 +60,6 @@ class Instrument(PartialNode):
         return self._serial
 
     @property
-    def data_server(self) -> 'DataServer':
+    def data_server(self) -> DataServer:
         """Data Server instance."""
         return self._data_server
