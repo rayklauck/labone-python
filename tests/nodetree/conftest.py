@@ -23,7 +23,8 @@ from labone.nodetree.node import (
     NodeTreeManager,
     PartialNode,
     ResultNode,
-    WildcardNode, WildcardOrPartialNode,
+    WildcardNode,
+    WildcardOrPartialNode,
 )
 
 if t.TYPE_CHECKING:
