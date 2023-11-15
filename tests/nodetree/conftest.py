@@ -5,7 +5,7 @@ import json
 import typing as t
 from functools import cached_property
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -268,16 +268,16 @@ class MockWildcardOrPartialNode(WildcardOrPartialNode):
 
     def wait_for_state_change(
         self,
-        value: int | NodeEnum,
+        value: int | NodeEnum,  # noqa: ARG002
         *,
-        invert: bool = False,
-        timeout: float = 2,
+        invert: bool = False,  # noqa: ARG002
+        timeout: float = 2,  # noqa: ARG002
     ) -> None:
         return
 
     def try_generate_subnode(
         self,
-        next_path_segment: NormalizedPathSegment,
+        next_path_segment: NormalizedPathSegment,  # noqa: ARG002
     ) -> Node:
         return
 
