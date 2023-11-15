@@ -173,6 +173,7 @@ class TestResultNode:
             ResultNode,
             '__repr__',
             return_value="some_node",
+            autospec=True,
         ):
             node = MockResultNode(())
             subnode = node.__getitem__(path)
@@ -461,10 +462,9 @@ class TestNode:
             autospec=True
         ) as normalize_patch, patch(
             "labone.nodetree.node.PartialNode.try_generate_subnode",
-            Mock(side_effect=
+            side_effect=
                  [MockPartialNode(path_segments[: i + 1]) for i in
-                  range(len(path_segments))]
-                 ),
+                  range(len(path_segments))],
         ) as try_generate_patch:
             node = MockPartialNode(())
             subnode = node.__getitem__(path)
