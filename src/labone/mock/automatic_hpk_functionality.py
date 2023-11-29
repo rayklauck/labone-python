@@ -1,48 +1,102 @@
+"""Partially predifined behaviour for HPK mock.
+
+This class provides basic Hpk mock functionality by taking over some usually
+desired tasks. With that in place, the user may inherit from this class
+in order to further specify behavior, without having to start from scratch.
+Even if some of the predefined behaviour is not desired, the implementation
+can give some reference on how an individual mock server can be implemented.
+
+
+Already predefined behaviour:
+
+    Simulating state for get/set:
+        A dictionary is used to store the state of the mock server.
+        Get and set will access this dictionary.
+
+    Answering list_nodes(_info) via knowledge of the tree structure:
+        Given a dictionary of paths to node info passed in the constructor,
+        the list_nodes(_info) methods will be able to answer accordingly.
+
+    Reducing get_with_expression/set_with_expression to multiple get/set:
+        As the tree structure is known, the get_with_expression/set_with_expression
+        methods can be implemented by calling the get/set methods multiple times.
+
+    Managing subscriptions and passing all changes into the queues:
+        The subscriptions are stored and on every change, the new value is passed
+        into the queues.
+
+    Adding chronological timestamps to responses:
+        The server answers need timestamps to the responsis in any case.
+        By using the monotonic clock, the timestamps are added automatically.
+
+"""
+
+from __future__ import annotations
+
 import asyncio
 import fnmatch
 import re
 import time
 import typing as t
-from typing import Any, Coroutine
 
 from labone.core import ListNodesFlags, ListNodesInfoFlags
-from labone.core.helper import LabOneNodePath
-from labone.core.session import NodeInfo
-from labone.core.subscription import StreamingHandle
-from labone.core.value import AnnotatedValue
+from labone.core.value import AnnotatedValue, Value
 from labone.mock.hpk_functionality import HpkMockFunctionality
+
+if t.TYPE_CHECKING:
+    from labone.core.helper import LabOneNodePath
+    from labone.core.session import NodeInfo
+    from labone.core.subscription import StreamingHandle
 
 
 class AutomaticHpkFunctionality(HpkMockFunctionality):
-    """Already predifined behaviour:
-    - simulating state for get/set
-    - adding chronological timestamps to responses
-    - manages subscriptions and passes all changes into the queues.
-    - answering list_nodes(_info) via knowledge of the tree structure
-    - reducing get_with_expression/set_with_expression naturally to get/set
-      (via knowledge of the tree structure)
+    """Predefined behaviour for HPK mock.
+
+    See module docstring for details.
+
+    For customizations, inherit from this class, override the methods
+    and call super() in the overriden methods if desired.
+
+    Args:
+        paths_to_info: Dictionary of paths to node info. (tree structure)
     """
 
-    def __init__(self, paths_to_info: dict[LabOneNodePath, NodeInfo] = {}) -> None:
-        self._paths_to_info = paths_to_info
-        self._memory = {}
-        self._path_to_streaming_handles: dict[
+    def __init__(
+        self,
+        paths_to_info: dict[LabOneNodePath, NodeInfo] | None = None,
+    ) -> None:
+        if paths_to_info is None:
+            paths_to_info = {}
+        self._paths_to_info = paths_to_info  # remembering tree structure
+        self._memory: dict[LabOneNodePath, Value] = {}  # storing state
+        self._path_to_streaming_handles: dict[  # storing subscriptions
             LabOneNodePath,
             list[StreamingHandle],
         ] = {}
 
-    def get_timestamp(self) -> int:
+    def _get_timestamp(self) -> int:
         return time.clock_gettime_ns(time.CLOCK_MONOTONIC)
 
     async def list_nodes_info(
         self,
         path: LabOneNodePath = "",
         *,
-        flags: ListNodesInfoFlags | int = ListNodesInfoFlags.ALL,
-    ) -> Coroutine[Any, Any, dict[LabOneNodePath, NodeInfo]]:
-        """
+        flags: ListNodesInfoFlags | int = ListNodesInfoFlags.ALL,  # noqa: ARG002
+    ) -> dict[LabOneNodePath, NodeInfo]:
+        """Predefined behaviour for list_nodes_info.
+
+        Uses knowledge of the tree structure to answer.
+
         Warning:
-            Flags will be ignored in this implementation. TODO
+            Flags will be ignored in this implementation. (TODO)
+
+        Args:
+            path: Path to narrow down which nodes should be listed. Omitting
+                the path will list all nodes by default.
+            flags: Flags to control the behaviour of the list_nodes_info method.
+
+        Returns:
+            Dictionary of paths to node info.
         """
         if path == "":
             return self._paths_to_info
@@ -56,11 +110,22 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
         self,
         path: LabOneNodePath = "",
         *,
-        flags: ListNodesFlags | int = ListNodesFlags.ABSOLUTE,
+        flags: ListNodesFlags | int = ListNodesFlags.ABSOLUTE,  # noqa: ARG002
     ) -> list[LabOneNodePath]:
-        """
+        """Predefined behaviour for list_nodes.
+
+        Uses knowledge of the tree structure to answer.
+
         Warning:
-            Flags will be ignored in this implementation. TODO
+            Flags will be ignored in this implementation. (TODO)
+
+        Args:
+            path: Path to narrow down which nodes should be listed. Omitting
+                the path will list all nodes by default.
+            flags: Flags to control the behaviour of the list_nodes method.
+
+        Returns:
+            List of paths.
         """
         if path == "":
             return list(self._paths_to_info.keys())
@@ -69,31 +134,68 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
         return fnmatch.filter(self._paths_to_info.keys(), path)
 
     async def get(self, path: LabOneNodePath) -> AnnotatedValue:
-        response = self._memory.get(path, AnnotatedValue(path=path, value=0))
-        response.timestamp = self.get_timestamp()
+        """Predefined behaviour for get.
+
+        Makes use of a simulated state.
+
+        Args:
+            path: Path of the node to get.
+
+        Returns:
+            Corresponding value.
+        """
+        value = self._memory.get(
+            path,
+            "not found in mock memory",
+        )
+        response = AnnotatedValue(path=path, value=value)
+        response.timestamp = self._get_timestamp()
         return response
 
     async def get_with_expression(
         self,
         path_expression: LabOneNodePath,
-        flags: ListNodesFlags
+        flags: ListNodesFlags  # noqa: ARG002
         | int = ListNodesFlags.ABSOLUTE
         | ListNodesFlags.RECURSIVE
         | ListNodesFlags.LEAVES_ONLY
         | ListNodesFlags.EXCLUDE_STREAMING
         | ListNodesFlags.GET_ONLY,
     ) -> list[AnnotatedValue]:
+        """Predefined behaviour for get_with_expression.
+
+        Will find all nodes associated with the path expression
+        and call get for each of them.
+
+        Args:
+            path_expression: Path expression to get.
+            flags: Flags to control the behaviour of the get_with_expression method.
+
+        Returns:
+            List of values, corresponding to nodes of the path expression.
+        """
         return [
             await self.get(p)
             for p in resolve_wildcards_labone(
-                path_expression, await self.list_nodes(path=path_expression)
+                path_expression,
+                await self.list_nodes(path=path_expression),
             )
         ]
 
-    async def set(self, value: AnnotatedValue) -> AnnotatedValue:
-        self._memory[value.path] = value
+    async def set(self, value: AnnotatedValue) -> AnnotatedValue:  # noqa: A003
+        """Predefined behaviour for set.
+
+        Makes use of a simulated state. Also will update subscriptions.
+
+        Args:
+            value: Value to set.
+
+        Returns:
+            Acknowledged value.
+        """
+        self._memory[value.path] = value.value
         response = value
-        response.timestamp = self.get_timestamp()
+        response.timestamp = self._get_timestamp()
 
         capnp_response = {
             "value": {"int64": response.value},
@@ -113,10 +215,22 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
         return response
 
     async def set_with_expression(self, value: AnnotatedValue) -> list[AnnotatedValue]:
+        """Predefined behaviour for set_with_expression.
+
+        Will find all nodes associated with the path expression
+        and call set for each of them.
+
+        Args:
+            value: Value to set.
+
+        Returns:
+            List of acknowledged values, corresponding to nodes of the path expression.
+        """
         return [
             await self.set(AnnotatedValue(value=value.value, path=p))
             for p in resolve_wildcards_labone(
-                value.path, await self.list_nodes(value.path)
+                value.path,
+                await self.list_nodes(value.path),
             )
         ]
 
@@ -125,18 +239,30 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
         *,
         path: LabOneNodePath,
         streaming_handle: StreamingHandle,
-        subscriber_ID: int,
+        subscriber_id: int,  # noqa: ARG002
     ) -> None:
-        """Override this method for defining subscription behavior."""
+        """Predefined behaviour for subscribe_logic.
+
+        Stores the subscription and passes all changes into the queue.
+
+        Args:
+            path: Path to subscribe to.
+            streaming_handle: Streaming handle of the subscriber.
+            subscriber_id: Id of the subscriber.
+        """
         if path not in self._path_to_streaming_handles:
             self._path_to_streaming_handles[path] = []
         self._path_to_streaming_handles[path].append(streaming_handle)
 
 
-def resolve_wildcards_labone(path: str, nodes: t.List[str]) -> t.List[str]:
+def resolve_wildcards_labone(path: str, nodes: list[str]) -> list[str]:
     """Resolves potential wildcards.
 
     Also will resolve partial nodes to its leaf nodes.
+
+    Args:
+        path: Path to resolve.
+        nodes: List of nodes to resolve against.
 
     Returns:
         List of matched nodes in the raw path format
