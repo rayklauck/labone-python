@@ -9,10 +9,10 @@ from labone.mock.mock_server import MockServer
 from labone.mock.session_mock_template import SessionMockTemplate
 
 if TYPE_CHECKING:
-    from labone.mock.hpk_functionality import HpkMockFunctionality
+    from labone.mock.session_mock_functionality import SessionMockFunctionality
 
 
-async def spawn_hpk_mock(functionality: HpkMockFunctionality) -> MockServer:
+async def spawn_hpk_mock(functionality: SessionMockFunctionality) -> MockServer:
     """Shortcut for creating a mock server.
 
     Args:
@@ -26,7 +26,12 @@ async def spawn_hpk_mock(functionality: HpkMockFunctionality) -> MockServer:
         PermissionError: If the file cannot be read.
         capnp.lib.capnp.KjException: If the schema is invalid. Or the id
             of the concrete server is not in the schema.
+
+    Example:
+        >>> mock_server = await spawn_hpk_mock(AutomaticSessionFunctionality(paths_to_info))
+
     """
+    test_reflection_server = await functionality.create_reflection_server()
     return MockServer(
         capability_bytes=Path(__file__).parent.parent / "resources" / "session.bin",
         concrete_server=SessionMockTemplate(

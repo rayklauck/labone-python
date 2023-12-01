@@ -322,3 +322,56 @@ def _value_from_python_types(
             msg,
         )
     return request_value
+
+
+def _value_from_python_types_dict(
+    value: t.Any,  # noqa: ANN401
+) -> capnp.lib.capnp._DynamicStructBuilder:
+    """Create `Value` builder from Python types.
+
+    Note:
+        This function is logically equivalent to `_value_from_python_types`.
+        However, it does not require a reflection server as an argument.
+        Instead of creating a capnp message via new_message, it does so by
+        defining a dictionary as a return value. Both approaches are
+        accepted by the capnp library.
+
+    Args:
+        value: The value to be converted.
+
+    Returns:
+        A new message builder for `capnp:Value`.
+
+    Raises:
+        LabOneCoreError: If the data type of the value to be set is not supported.
+    """
+    type_to_message = {
+        bool: lambda x: {"int64": int(x)},
+        np.integer: lambda x: {"int64": x},
+        np.floating: lambda x: {"double": x},
+        complex: lambda x: {"complex": {"real": x.real, "imag": x.imag}},
+        str: lambda x: {"string": x},
+        bytes: lambda x: {
+            "vectorData": {
+                "valueType": VectorValueType.BYTE_ARRAY.value,
+                "extraHeaderInfo": 0,
+                "vectorElementType": VectorElementType.UINT8.value,
+                "data": x,
+            },
+        },
+        np.ndarray: lambda x: {
+            "vectorData": {
+                "valueType": VectorValueType.VECTOR_DATA.value,
+                "extraHeaderInfo": 0,
+                "vectorElementType": VectorElementType.from_numpy_type(x.dtype).value,
+                "data": x.tobytes(),
+            },
+        },
+    }
+
+    for type_, message_builder in type_to_message.items():
+        if isinstance(value, type_) or np.issubdtype(type(value), type_):
+            return message_builder(value)
+
+    msg = f"The provided value has an invalid type: {type(value)}"
+    raise ValueError(msg)

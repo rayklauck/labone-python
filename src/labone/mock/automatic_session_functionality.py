@@ -9,23 +9,19 @@ can give some reference on how an individual mock server can be implemented.
 
 Already predefined behaviour:
 
-    Simulating state for get/set:
+    * Simulating state for get/set:
         A dictionary is used to store the state of the mock server.
         Get and set will access this dictionary.
-
-    Answering list_nodes(_info) via knowledge of the tree structure:
+    * Answering list_nodes(_info) via knowledge of the tree structure:
         Given a dictionary of paths to node info passed in the constructor,
         the list_nodes(_info) methods will be able to answer accordingly.
-
-    Reducing get_with_expression/set_with_expression to multiple get/set:
+    * Reducing get_with_expression/set_with_expression to multiple get/set:
         As the tree structure is known, the get_with_expression/set_with_expression
         methods can be implemented by calling the get/set methods multiple times.
-
-    Managing subscriptions and passing all changes into the queues:
+    * Managing subscriptions and passing all changes into the queues:
         The subscriptions are stored and on every change, the new value is passed
         into the queues.
-
-    Adding chronological timestamps to responses:
+    * Adding chronological timestamps to responses:
         The server answers need timestamps to the responsis in any case.
         By using the monotonic clock, the timestamps are added automatically.
 
@@ -40,8 +36,8 @@ import time
 import typing as t
 
 from labone.core import ListNodesFlags, ListNodesInfoFlags
-from labone.core.value import AnnotatedValue, Value
-from labone.mock.hpk_functionality import HpkMockFunctionality
+from labone.core.value import AnnotatedValue, Value, _value_from_python_types_dict
+from labone.mock.session_mock_functionality import SessionMockFunctionality
 
 if t.TYPE_CHECKING:
     from labone.core.helper import LabOneNodePath
@@ -49,13 +45,8 @@ if t.TYPE_CHECKING:
     from labone.core.subscription import StreamingHandle
 
 
-class AutomaticHpkFunctionality(HpkMockFunctionality):
+class AutomaticSessionFunctionality(SessionMockFunctionality):
     """Predefined behaviour for HPK mock.
-
-    See module docstring for details.
-
-    For customizations, inherit from this class, override the methods
-    and call super() in the overriden methods if desired.
 
     Args:
         paths_to_info: Dictionary of paths to node info. (tree structure)
@@ -67,9 +58,13 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
     ) -> None:
         if paths_to_info is None:
             paths_to_info = {}
-        self._paths_to_info = paths_to_info  # remembering tree structure
-        self._memory: dict[LabOneNodePath, Value] = {}  # storing state
-        self._path_to_streaming_handles: dict[  # storing subscriptions
+
+        # remembering tree structure
+        self._paths_to_info = paths_to_info  
+        # storing state
+        self._memory: dict[LabOneNodePath, Value] = {}  
+        # storing subscriptions
+        self._path_to_streaming_handles: dict[  
             LabOneNodePath,
             list[StreamingHandle],
         ] = {}
@@ -136,7 +131,7 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
     async def get(self, path: LabOneNodePath) -> AnnotatedValue:
         """Predefined behaviour for get.
 
-        Makes use of a simulated state.
+        Look up the path in the internal dictionary.
 
         Args:
             path: Path of the node to get.
@@ -164,7 +159,7 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
     ) -> list[AnnotatedValue]:
         """Predefined behaviour for get_with_expression.
 
-        Will find all nodes associated with the path expression
+        Find all nodes associated with the path expression
         and call get for each of them.
 
         Args:
@@ -185,7 +180,8 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
     async def set(self, value: AnnotatedValue) -> AnnotatedValue:  # noqa: A003
         """Predefined behaviour for set.
 
-        Makes use of a simulated state. Also will update subscriptions.
+        Updates the internal dictionary. A set command is considered 
+        as an update and will be distributed to all registered subscription handlers.
 
         Args:
             value: Value to set.
@@ -198,7 +194,7 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
         response.timestamp = self._get_timestamp()
 
         capnp_response = {
-            "value": {"int64": response.value},
+            "value": _value_from_python_types_dict(response.value), #{"int64": response.value}, #todo
             "metadata": {
                 "path": response.path,
                 "timestamp": response.timestamp,
@@ -217,7 +213,7 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
     async def set_with_expression(self, value: AnnotatedValue) -> list[AnnotatedValue]:
         """Predefined behaviour for set_with_expression.
 
-        Will find all nodes associated with the path expression
+        Finds all nodes associated with the path expression
         and call set for each of them.
 
         Args:
@@ -243,7 +239,8 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
     ) -> None:
         """Predefined behaviour for subscribe_logic.
 
-        Stores the subscription and passes all changes into the queue.
+        Stores the subscription. Whenever an update event happens 
+        they are distributed to all registered handles,
 
         Args:
             path: Path to subscribe to.
@@ -258,7 +255,8 @@ class AutomaticHpkFunctionality(HpkMockFunctionality):
 def resolve_wildcards_labone(path: str, nodes: list[str]) -> list[str]:
     """Resolves potential wildcards.
 
-    Also will resolve partial nodes to its leaf nodes.
+    In addition to the wildcard, this function also resolves partial nodes to 
+    its leaf nodes.
 
     Args:
         path: Path to resolve.

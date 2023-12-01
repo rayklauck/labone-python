@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from labone.core.helper import VectorElementType, VectorValueType
-from labone.core.value import AnnotatedValue, _capnp_value_to_python_value
+from labone.core.value import AnnotatedValue, _capnp_value_to_python_value, _value_from_python_types_dict
 from labone.mock.mock_server import ServerTemplate
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     )
 
     from labone.core.session import ListNodesFlags
-    from labone.mock.hpk_functionality import HpkMockFunctionality
+    from labone.mock.session_mock_functionality import SessionMockFunctionality
 
 HPK_SCHEMA_ID = 11970870220622790664
 SERVER_ERROR = "SERVER_ERROR"
@@ -55,52 +55,6 @@ def build_capnp_error(error: Exception) -> _DynamicStructBuilder:
     }
 
 
-def _value_from_python_types(
-    value: t.Any,  # noqa: ANN401
-) -> _DynamicStructBuilder:
-    """Create `Value` builder from Python types.
-
-    Args:
-        value: The value to be converted.
-
-    Returns:
-        A new message builder for `capnp:Value`.
-
-    Raises:
-        LabOneCoreError: If the data type of the value to be set is not supported.
-    """
-    type_to_message = {
-        bool: lambda x: {"int64": int(x)},
-        np.integer: lambda x: {"int64": x},
-        np.floating: lambda x: {"double": x},
-        complex: lambda x: {"complex": {"real": x.real, "imag": x.imag}},
-        str: lambda x: {"string": x},
-        bytes: lambda x: {
-            "vectorData": {
-                "valueType": VectorValueType.BYTE_ARRAY.value,
-                "extraHeaderInfo": 0,
-                "vectorElementType": VectorElementType.UINT8.value,
-                "data": x,
-            },
-        },
-        np.ndarray: lambda x: {
-            "vectorData": {
-                "valueType": VectorValueType.VECTOR_DATA.value,
-                "extraHeaderInfo": 0,
-                "vectorElementType": VectorElementType.from_numpy_type(x.dtype).value,
-                "data": x.tobytes(),
-            },
-        },
-    }
-
-    for type_, message_builder in type_to_message.items():
-        if isinstance(value, type_) or np.issubdtype(type(value), type_):
-            return message_builder(value)
-
-    msg = f"The provided value has an invalid type: {type(value)}"
-    raise ValueError(msg)
-
-
 class SessionMockTemplate(ServerTemplate):
     """Hpk Mock Server.
 
@@ -117,9 +71,10 @@ class SessionMockTemplate(ServerTemplate):
         functionality: The implementation of the mock server behavior.
     """
 
+    # unique capnp id of the Hpk schema
     id_ = HPK_SCHEMA_ID
 
-    def __init__(self, functionality: HpkMockFunctionality) -> None:
+    def __init__(self, functionality: SessionMockFunctionality) -> None:
         self._functionality = functionality
 
     async def listNodes(  # noqa: N802
@@ -210,7 +165,7 @@ class SessionMockTemplate(ServerTemplate):
         return [
             {
                 "ok": {
-                    "value": _value_from_python_types(response.value),
+                    "value": _value_from_python_types_dict(response.value),
                     "metadata": {
                         "path": response.path,
                         "timestamp": response.timestamp,
@@ -263,7 +218,7 @@ class SessionMockTemplate(ServerTemplate):
         return [
             {
                 "ok": {
-                    "value": _value_from_python_types(response.value),
+                    "value": _value_from_python_types_dict(response.value),
                     "metadata": {
                         "path": response.path,
                         "timestamp": response.timestamp,

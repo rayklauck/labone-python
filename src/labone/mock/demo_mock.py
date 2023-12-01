@@ -10,33 +10,33 @@ from labone.core import ListNodesFlags
 from labone.core.reflection import ReflectionServer
 from labone.core.session import Session
 from labone.core.value import AnnotatedValue
-from labone.mock.automatic_hpk_functionality import AutomaticHpkFunctionality
+from labone.mock.automatic_session_functionality import AutomaticSessionFunctionality
 from labone.mock.entry_point import spawn_hpk_mock
 
 if TYPE_CHECKING:
     from labone.core.helper import LabOneNodePath
 
 
-class TestHPK(AutomaticHpkFunctionality):
-    def set_with_expression(
-        self,
-        value: AnnotatedValue,
-    ) -> Coroutine[Any, Any, list[AnnotatedValue]]:
-        msg = "(test) e.g. tried to set invalid path"
-        raise ValueError(msg)
+# class TestHPK(AutomaticSessionFunctionality):
+#     def set_with_expression(
+#         self,
+#         value: AnnotatedValue,
+#     ) -> Coroutine[Any, Any, list[AnnotatedValue]]:
+#         msg = "(test) e.g. tried to set invalid path"
+#         raise ValueError(msg)
 
-    def get_with_expression(
-        self,
-        path_expression: LabOneNodePath,
-        flags: ListNodesFlags
-        | int = ListNodesFlags.ABSOLUTE
-        | ListNodesFlags.RECURSIVE
-        | ListNodesFlags.LEAVES_ONLY
-        | ListNodesFlags.EXCLUDE_STREAMING
-        | ListNodesFlags.GET_ONLY,
-    ) -> Coroutine[Any, Any, list[AnnotatedValue]]:
-        msg = "(test) e.g. tried to set invalid path"
-        raise ValueError(msg)
+#     def get_with_expression(
+#         self,
+#         path_expression: LabOneNodePath,
+#         flags: ListNodesFlags
+#         | int = ListNodesFlags.ABSOLUTE
+#         | ListNodesFlags.RECURSIVE
+#         | ListNodesFlags.LEAVES_ONLY
+#         | ListNodesFlags.EXCLUDE_STREAMING
+#         | ListNodesFlags.GET_ONLY,
+#     ) -> Coroutine[Any, Any, list[AnnotatedValue]]:
+#         msg = "(test) e.g. tried to set invalid path"
+#         raise ValueError(msg)
 
 
 async def main():
@@ -47,7 +47,7 @@ async def main():
         "/a/x/z/q": {},
     }
 
-    mock_server = await spawn_hpk_mock(AutomaticHpkFunctionality(paths_to_info))
+    mock_server = await spawn_hpk_mock(AutomaticSessionFunctionality(paths_to_info))
 
     client_connection = await mock_server.start()
     reflection_client = await ReflectionServer.create_from_connection(client_connection)

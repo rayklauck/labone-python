@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from labone.core.value import AnnotatedValue
 
 
-class HpkMockFunctionality(ABC):
+class SessionMockFunctionality(ABC):
     """Hpk blueprint for defining mock server behavior.
 
     Inherit and override the methods to define an individual mock server.
