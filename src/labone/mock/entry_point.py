@@ -31,7 +31,6 @@ async def spawn_hpk_mock(functionality: SessionMockFunctionality) -> MockServer:
         >>> mock_server = await spawn_hpk_mock(AutomaticSessionFunctionality(paths_to_info))
 
     """
-    test_reflection_server = await functionality.create_reflection_server()
     return MockServer(
         capability_bytes=Path(__file__).parent.parent / "resources" / "session.bin",
         concrete_server=SessionMockTemplate(

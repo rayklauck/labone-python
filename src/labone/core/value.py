@@ -23,6 +23,7 @@ from labone.core.helper import (
 from labone.core.shf_vector_data import (
     ExtraHeader,
     SHFDemodSample,
+    encode_shf_vector_data_struct,
     get_header_length,
     parse_shf_vector_data_struct,
 )
@@ -100,7 +101,7 @@ class AnnotatedValue:
             field_type = request_field_type_description(message.metadata, "path")
             msg = f"`path` attribute must be of type {field_type}."
             raise TypeError(msg) from None
-        message.value = _value_from_python_types(self.value, reflection=reflection)
+        message.value = _value_from_python_types(self, reflection=reflection)
         return message
 
 
@@ -271,7 +272,7 @@ def _capnp_value_to_python_value(
 
 
 def _value_from_python_types(
-    value: t.Any,  # noqa: ANN401
+    ann_value: AnnotatedValue,  # noqa: ANN401
     *,
     reflection: ReflectionServer,
 ) -> capnp.lib.capnp._DynamicStructBuilder:  # noqa: SLF001
@@ -287,8 +288,25 @@ def _value_from_python_types(
     Raises:
         LabOneCoreError: If the data type of the value to be set is not supported.
     """
+    value = ann_value.value
     request_value = reflection.Value.new_message()  # type: ignore[attr-defined]
-    if isinstance(value, bool):
+
+    if isinstance(value, np.ndarray):
+        if ann_value.extra_header is None:
+            request_value.vectorData = value.tobytes()
+        else:
+            return {"vectorData": encode_shf_vector_data_struct(
+                value, ann_value.extra_header
+            )}
+    elif isinstance(value, SHFDemodSample):
+        if value.extra_header is None:
+            raise ValueError("SHFDemodSample requires extra_header")
+        return {"vectorData":encode_shf_vector_data_struct(value, ann_value.extra_header)
+        }
+    elif isinstance(value, (TriggerSample, CntSample)):
+        raise NotImplementedError("TriggerSample and CntSample not yet implemented")
+    
+    elif isinstance(value, bool):
         request_value.int64 = int(value)
     elif np.issubdtype(type(value), np.integer):
         request_value.int64 = value
@@ -325,7 +343,7 @@ def _value_from_python_types(
 
 
 def _value_from_python_types_dict(
-    value: t.Any,  # noqa: ANN401
+    ann_value: AnnotatedValue,  # noqa: ANN401
 ) -> capnp.lib.capnp._DynamicStructBuilder:
     """Create `Value` builder from Python types.
 
@@ -345,6 +363,21 @@ def _value_from_python_types_dict(
     Raises:
         LabOneCoreError: If the data type of the value to be set is not supported.
     """
+    if isinstance(ann_value.value, np.ndarray):
+        if ann_value.extra_header is None:
+            return {"vectorData": ann_value.value.tobytes()}
+        else:
+            return {"vectorData": encode_shf_vector_data_struct(
+                ann_value.value, ann_value.extra_header
+            )}
+    elif isinstance(ann_value.value, SHFDemodSample):
+        if ann_value.extra_header is None:
+            raise ValueError("SHFDemodSample requires extra_header")
+        return {"vectorData":encode_shf_vector_data_struct(ann_value.value, ann_value.extra_header)
+        }
+    elif isinstance(ann_value.value, (TriggerSample, CntSample)):
+        raise NotImplementedError("TriggerSample and CntSample not yet implemented")
+
     type_to_message = {
         bool: lambda x: {"int64": int(x)},
         np.integer: lambda x: {"int64": x},
@@ -369,6 +402,7 @@ def _value_from_python_types_dict(
         },
     }
 
+    value = ann_value.value
     for type_, message_builder in type_to_message.items():
         if isinstance(value, type_) or np.issubdtype(type(value), type_):
             return message_builder(value)

@@ -35,8 +35,17 @@ import re
 import time
 import typing as t
 
+import numpy as np
+
 from labone.core import ListNodesFlags, ListNodesInfoFlags
-from labone.core.value import AnnotatedValue, Value, _value_from_python_types_dict
+from labone.core.shf_vector_data import SHFDemodSample, encode_shf_vector_data_struct
+from labone.core.value import (
+    AnnotatedValue,
+    CntSample,
+    TriggerSample,
+    Value,
+    _value_from_python_types_dict,
+)
 from labone.mock.session_mock_functionality import SessionMockFunctionality
 
 if t.TYPE_CHECKING:
@@ -60,11 +69,11 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
             paths_to_info = {}
 
         # remembering tree structure
-        self._paths_to_info = paths_to_info  
+        self._paths_to_info = paths_to_info
         # storing state
-        self._memory: dict[LabOneNodePath, Value] = {}  
+        self._memory: dict[LabOneNodePath, Value] = {}
         # storing subscriptions
-        self._path_to_streaming_handles: dict[  
+        self._path_to_streaming_handles: dict[
             LabOneNodePath,
             list[StreamingHandle],
         ] = {}
@@ -180,7 +189,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
     async def set(self, value: AnnotatedValue) -> AnnotatedValue:  # noqa: A003
         """Predefined behaviour for set.
 
-        Updates the internal dictionary. A set command is considered 
+        Updates the internal dictionary. A set command is considered
         as an update and will be distributed to all registered subscription handlers.
 
         Args:
@@ -194,7 +203,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         response.timestamp = self._get_timestamp()
 
         capnp_response = {
-            "value": _value_from_python_types_dict(response.value), #{"int64": response.value}, #todo
+            "value": _value_from_python_types_dict(response),
             "metadata": {
                 "path": response.path,
                 "timestamp": response.timestamp,
@@ -239,7 +248,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
     ) -> None:
         """Predefined behaviour for subscribe_logic.
 
-        Stores the subscription. Whenever an update event happens 
+        Stores the subscription. Whenever an update event happens
         they are distributed to all registered handles,
 
         Args:
@@ -255,7 +264,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
 def resolve_wildcards_labone(path: str, nodes: list[str]) -> list[str]:
     """Resolves potential wildcards.
 
-    In addition to the wildcard, this function also resolves partial nodes to 
+    In addition to the wildcard, this function also resolves partial nodes to
     its leaf nodes.
 
     Args:

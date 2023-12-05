@@ -186,6 +186,21 @@ class ShfScopeVectorExtraHeader:
         )
         raise NotImplementedError(msg)
 
+    def to_binary(self):
+        return struct.pack("qIBddqIIIIII", 
+                           self.timestamp, 
+                           self.timestamp_diff, 
+                           self.interleaved,
+                           self.scaling,
+                           self.center_freq,
+                           self.trigger_timestamp,
+                           self.input_select,
+                           self.average_count,
+                           self.num_segments,
+                           self.num_total_segments,
+                           self.first_segment_index,
+                           self.num_missed_triggers,
+                           )
 
 @dataclass
 class ShfDemodulatorVectorExtraHeader:
@@ -497,3 +512,59 @@ def parse_shf_vector_data_struct(
         return _deserialize_shf_waveform_vector(raw_data), None
     msg = f"Unsupported vector value type: {value_type}"
     raise ValueError(msg)
+
+
+def encode_shf_vector_data_struct(
+    data: np.ndarray | SHFDemodSample,
+    extra_header: ExtraHeader,
+    version: _HeaderVersion = _HeaderVersion(major=2, minor=0)
+) -> CapnpCapability:
+    """Encode the SHF vector data struct.
+    """
+
+    if isinstance(extra_header, ShfScopeVectorExtraHeader):
+        value_type = VectorValueType.SHF_SCOPE_VECTOR_DATA
+        vector_element_type_np = np.uint32 # todo type actually not correct
+
+        data /= extra_header.scaling
+
+        # bring into format [1_real, 1_imag, 2_real, 2_imag, ...]
+        # all values as int
+        arr = []
+        for i in range(len(data)):
+            arr.append(int(data[i].real))
+            arr.append(int(data[i].imag))
+        data_to_send_np = np.array(arr, dtype=np.int32)
+        # print(data_to_send_np)
+
+    elif isinstance(extra_header, ShfDemodulatorVectorExtraHeader):
+        value_type = VectorValueType.SHF_DEMODULATOR_VECTOR_DATA
+        vector_element_type_np = np.uint64 # todo type
+        #todo complete
+
+    elif isinstance(extra_header, ShfResultLoggerVectorExtraHeader):
+        value_type = VectorValueType.SHF_RESULT_LOGGER_VECTOR_DATA
+        vector_element_type_np = data.dtype
+        #todo complete
+
+
+    # prevent wrong type data to be send
+    # if np.dtype(data_to_send_np.dtype) != vector_element_type_np:
+    #     raise ValueError(f"Data type {data_to_send_np.dtype} does not match "
+    #                         f"{vector_element_type_np}")
+
+    extra_header_bytes = extra_header.to_binary()
+    len_extra_header: int = len(extra_header_bytes) >> 2  # >> 2 to get 32 bit words from bytes
+    #print(len_extra_header)
+    # encoding will be incorrect, if len_extra_header is >= 2^16 or minor >= 2^3 or major >= 2^5
+    extra_header_info: int = version.minor << (5 + 16) | version.major << 16 | len_extra_header
+
+    return {
+            'valueType': value_type.value,
+            'vectorElementType': VectorElementType.from_numpy_type(
+                vector_element_type_np).value,
+            'extraHeaderInfo': extra_header_info,
+            'data': extra_header_bytes + 
+                data_to_send_np.tobytes(),
+        }
+    

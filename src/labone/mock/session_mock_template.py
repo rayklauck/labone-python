@@ -18,7 +18,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from labone.core.helper import VectorElementType, VectorValueType
-from labone.core.value import AnnotatedValue, _capnp_value_to_python_value, _value_from_python_types_dict
+from labone.core.value import (
+    AnnotatedValue,
+    _capnp_value_to_python_value,
+    _value_from_python_types_dict,
+)
 from labone.mock.mock_server import ServerTemplate
 
 if TYPE_CHECKING:
@@ -165,7 +169,7 @@ class SessionMockTemplate(ServerTemplate):
         return [
             {
                 "ok": {
-                    "value": _value_from_python_types_dict(response.value),
+                    "value": _value_from_python_types_dict(response),
                     "metadata": {
                         "path": response.path,
                         "timestamp": response.timestamp,
@@ -200,17 +204,22 @@ class SessionMockTemplate(ServerTemplate):
         Returns:
             List of acknowledged values.
         """
-        value, _ = _capnp_value_to_python_value(value)
+        value, extra_header = _capnp_value_to_python_value(value)
+        annotated_value = AnnotatedValue(
+                value=value,
+                path=pathExpression,
+                extra_header=extra_header,
+            )
+        
+
         try:
             if lookupMode == 0:  # direct lookup
                 responses = [
-                    await self._functionality.set(
-                        AnnotatedValue(value=value, path=pathExpression),
-                    ),
+                    await self._functionality.set(annotated_value),
                 ]
             else:
                 responses = await self._functionality.set_with_expression(
-                    AnnotatedValue(value=value, path=pathExpression),
+                    annotated_value
                 )
         except Exception as e:  # noqa: BLE001
             return [build_capnp_error(e)]
@@ -218,7 +227,7 @@ class SessionMockTemplate(ServerTemplate):
         return [
             {
                 "ok": {
-                    "value": _value_from_python_types_dict(response.value),
+                    "value": _value_from_python_types_dict(response),
                     "metadata": {
                         "path": response.path,
                         "timestamp": response.timestamp,
