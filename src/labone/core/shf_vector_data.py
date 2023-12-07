@@ -89,6 +89,13 @@ class ShfResultLoggerVectorExtraHeader:
         )
         raise NotImplementedError(msg)
 
+    def to_binary(self):
+        return struct.pack("qIdd", 
+                            self.timestamp,
+                            self.timestamp_diff,
+                            self.scaling,
+                            self.center_freq,
+                           )
 
 @dataclass
 class ShfScopeVectorExtraHeader:
@@ -305,6 +312,31 @@ class ShfDemodulatorVectorExtraHeader:
             "ShfDemodulatorVectorExtraHeader",
         )
         raise NotImplementedError(msg)
+    
+
+    def to_binary(self):
+        """
+        
+        Warning: Also works with version.minor >= 2.
+        """
+        timebase = 2.5e-10
+        max_demod_rate = 5e7
+
+
+        return struct.pack("qIBBIIIIddHH", 
+                            self.timestamp,
+                            int(self.timestamp_diff * (timebase * max_demod_rate)),
+                            self.abort_config,
+                            self.trigger_source,
+                            self.trigger_length,
+                            self.trigger_index,
+                            self.trigger_tag,
+                            self.awg_tag,
+                            self.scaling,
+                            self.center_freq,
+                            self.oscillator_source,
+                            self.signal_source,
+                           )
 
 
 ExtraHeader = Union[
@@ -517,35 +549,38 @@ def parse_shf_vector_data_struct(
 def encode_shf_vector_data_struct(
     data: np.ndarray | SHFDemodSample,
     extra_header: ExtraHeader,
-    version: _HeaderVersion = _HeaderVersion(major=2, minor=0)
+    version: _HeaderVersion = _HeaderVersion(major=2, minor=2)
 ) -> CapnpCapability:
     """Encode the SHF vector data struct.
     """
 
     if isinstance(extra_header, ShfScopeVectorExtraHeader):
         value_type = VectorValueType.SHF_SCOPE_VECTOR_DATA
-        vector_element_type_np = np.uint32 # todo type actually not correct
+        vector_element_type_np = np.uint32 # todo type actually not correct, but signed int32 not supported and also value not required for decoding. Thus unimportant...
 
         data /= extra_header.scaling
 
         # bring into format [1_real, 1_imag, 2_real, 2_imag, ...]
         # all values as int
-        arr = []
-        for i in range(len(data)):
-            arr.append(int(data[i].real))
-            arr.append(int(data[i].imag))
-        data_to_send_np = np.array(arr, dtype=np.int32)
-        # print(data_to_send_np)
+        data_to_send_np = np.empty((2*data.size,), dtype=np.int32)
+        data_to_send_np[0::2] = data.real
+        data_to_send_np[1::2] = data.imag
 
     elif isinstance(extra_header, ShfDemodulatorVectorExtraHeader):
         value_type = VectorValueType.SHF_DEMODULATOR_VECTOR_DATA
         vector_element_type_np = np.uint64 # todo type
-        #todo complete
+        
+        data.x = np.array(data.x / extra_header.scaling, dtype=np.int64)
+        data.y = np.array(data.y / extra_header.scaling, dtype=np.int64)
+
+        data_to_send_np = np.empty((2*data.x.size,), dtype=np.int64)
+        data_to_send_np[0::2] = data.x
+        data_to_send_np[1::2] = data.y
 
     elif isinstance(extra_header, ShfResultLoggerVectorExtraHeader):
         value_type = VectorValueType.SHF_RESULT_LOGGER_VECTOR_DATA
         vector_element_type_np = data.dtype
-        #todo complete
+        data_to_send_np = data
 
 
     # prevent wrong type data to be send

@@ -299,7 +299,7 @@ def _value_from_python_types(
                 value, ann_value.extra_header
             )}
     elif isinstance(value, SHFDemodSample):
-        if value.extra_header is None:
+        if ann_value.extra_header is None:
             raise ValueError("SHFDemodSample requires extra_header")
         return {"vectorData":encode_shf_vector_data_struct(value, ann_value.extra_header)
         }

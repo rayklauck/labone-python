@@ -31,9 +31,10 @@ class ServerTemplate(ABC):
     It stands for the actual functionality of the server, which
     will be defined in the subclasses.
 
-    The id_ attribute stands for the unique capnp id of the 
+    The id_ attribute stands for the unique capnp id of the
     concrete server.
     """
+
     id_: int
 
 

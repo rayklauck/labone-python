@@ -11,35 +11,13 @@ import numpy as np
 from labone.core import ListNodesFlags
 from labone.core.reflection import ReflectionServer
 from labone.core.session import Session
-from labone.core.shf_vector_data import ShfScopeVectorExtraHeader
+from labone.core.shf_vector_data import SHFDemodSample, ShfDemodulatorVectorExtraHeader, ShfResultLoggerVectorExtraHeader, ShfScopeVectorExtraHeader
 from labone.core.value import AnnotatedValue
 from labone.mock.automatic_session_functionality import AutomaticSessionFunctionality
 from labone.mock.entry_point import spawn_hpk_mock
 
 if TYPE_CHECKING:
     from labone.core.helper import LabOneNodePath
-
-
-# class TestHPK(AutomaticSessionFunctionality):
-#     def set_with_expression(
-#         self,
-#         value: AnnotatedValue,
-#     ) -> Coroutine[Any, Any, list[AnnotatedValue]]:
-#         msg = "(test) e.g. tried to set invalid path"
-#         raise ValueError(msg)
-
-#     def get_with_expression(
-#         self,
-#         path_expression: LabOneNodePath,
-#         flags: ListNodesFlags
-#         | int = ListNodesFlags.ABSOLUTE
-#         | ListNodesFlags.RECURSIVE
-#         | ListNodesFlags.LEAVES_ONLY
-#         | ListNodesFlags.EXCLUDE_STREAMING
-#         | ListNodesFlags.GET_ONLY,
-#     ) -> Coroutine[Any, Any, list[AnnotatedValue]]:
-#         msg = "(test) e.g. tried to set invalid path"
-#         raise ValueError(msg)
 
 
 async def main():
@@ -77,6 +55,25 @@ async def main():
         ),
     )
 
+    # await session.set(
+    #     AnnotatedValue(
+    #         path="/a/b/c",
+    #         value=SHFDemodSample(np.array([6, 3], dtype=np.int64), np.array([7, 2], dtype=np.int64)),
+    #         timestamp=0,
+    #         extra_header=ShfDemodulatorVectorExtraHeader(0,0,False,0,0,0,0,0,0.5,-3, 0,0),
+    #     ),
+    # )
+
+    # await session.set(
+    #     AnnotatedValue(
+    #         path="/a/b/c",
+    #         value=np.array([50 + 100j, 100 + 150j], dtype=np.complex64) ,
+    #         timestamp=0,
+    #         extra_header=ShfResultLoggerVectorExtraHeader(0,0,50,0),
+           
+    #             ),
+    # )
+    
     print("Queue:")
     while not q.empty():
         print(await q.get())
