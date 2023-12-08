@@ -258,47 +258,60 @@ def test_shf_waveform_logger_vector(vector_length, x, y, reflection_server):
     assert extra_header is None
 
 
-
 class GetAttrAbleDict(dict):
     def __getattr__(self, item):
         return self[item]
 
-@pytest.mark.parametrize(("header","data"), [
-    (
-        ShfScopeVectorExtraHeader(0,0,False,3.0,7,0,0,1,1,1,1,0), 
-        np.array([6 + 6j, 3 + 3j], dtype=np.complex64)
-    ),
-    (
-        ShfDemodulatorVectorExtraHeader(0,0,False,0,0,0,0,0,0.5,-3, 0,0),
-        SHFDemodSample(np.array([6, 3], dtype=np.int64), np.array([7, 2], dtype=np.int64))
-    ),
-    (
-        ShfResultLoggerVectorExtraHeader(0,0,50,0),
-        np.array([50 + 100j, 100 + 150j], dtype=np.complex64)
-    )
-])
-def test_encoding(header, data):
-    if isinstance(data, np.ndarray):
-        data_copy = data.copy()
-    else:
-        data_copy = SHFDemodSample(data.x.copy(), data.y.copy())
-    
+
+@pytest.mark.parametrize(
+    ("header", "data"),
+    [
+        (
+            ShfScopeVectorExtraHeader(0, 0, False, 3.0, 7, 0, 0, 1, 1, 1, 1, 0),
+            np.array([6 + 6j, 3 + 3j], dtype=np.complex64),
+        ),
+        (
+            ShfResultLoggerVectorExtraHeader(0, 0, 50, 0),
+            np.array([50 + 100j, 100 + 150j], dtype=np.complex64),
+        ),
+    ],
+)
+def test_encoding_decoding_are_invers(header, data):
+    data_copy = data.copy()
     capnp = encode_shf_vector_data_struct(
         data,
         header,
     )
-    print(capnp)
-    #assert False
     inp = GetAttrAbleDict()
     inp.update(capnp)
     extracted_data, extracted_header = parse_shf_vector_data_struct(inp)
-    print(extracted_header, extracted_data)
-    assert extracted_header == header
 
-    if isinstance(data, np.ndarray):
-        assert np.array_equal(extracted_data, data_copy)
-    else:
-        assert np.array_equal(extracted_data.x, data_copy.x)
-        assert np.array_equal(extracted_data.y, data_copy.y)
-    
-    
+    assert extracted_header == header
+    assert np.array_equal(extracted_data, data_copy)
+
+
+@pytest.mark.parametrize(
+    ("header", "data"),
+    [
+        (
+            ShfDemodulatorVectorExtraHeader(0, 0, False, 0, 0, 0, 0, 0, 0.5, -3, 0, 0),
+            SHFDemodSample(
+                np.array([6, 3], dtype=np.int64), np.array([7, 2], dtype=np.int64)
+            ),
+        ),
+    ],
+)
+def test_encoding_decoding_are_invers_shf_demod_sample(header, data):
+    data_copy = SHFDemodSample(data.x.copy(), data.y.copy())
+
+    capnp = encode_shf_vector_data_struct(
+        data,
+        header,
+    )
+    inp = GetAttrAbleDict()
+    inp.update(capnp)
+    extracted_data, extracted_header = parse_shf_vector_data_struct(inp)
+
+    assert extracted_header == header
+    assert np.array_equal(extracted_data.x, data_copy.x)
+    assert np.array_equal(extracted_data.y, data_copy.y)

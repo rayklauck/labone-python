@@ -206,11 +206,10 @@ class SessionMockTemplate(ServerTemplate):
         """
         value, extra_header = _capnp_value_to_python_value(value)
         annotated_value = AnnotatedValue(
-                value=value,
-                path=pathExpression,
-                extra_header=extra_header,
-            )
-        
+            value=value,
+            path=pathExpression,
+            extra_header=extra_header,
+        )
 
         try:
             if lookupMode == 0:  # direct lookup

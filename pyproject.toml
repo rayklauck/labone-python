@@ -58,8 +58,9 @@ python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
 dependencies = ["coverage[toml]>=6.5", "pytest", "hypothesis", "pytest-asyncio"]
 
 [tool.hatch.envs.test.scripts]
-test = "pytest {args:tests}"
-test-cov = "coverage run -m pytest {args:tests}"
+test = "pytest {args:tests} -k 'not mock_compatibility'"
+test-cov = "coverage run -m pytest {args:tests} -k 'not mock_compatibility'"
+mock_compatibility = "pytest {args:tests} -k mock_compatibility"
 cov-report = [
   "- coverage combine",
   "coverage report",

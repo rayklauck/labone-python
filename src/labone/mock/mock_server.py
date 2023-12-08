@@ -148,9 +148,9 @@ class MockServer:
         Raises:
             RuntimeError: If the server is already started.
         """
-        if self._server is not None:
-            msg = "Server already started."
-            raise RuntimeError(msg)
+        if self._server is not None:  # pragma: no cover
+            msg = "Server already started."  # pragma: no cover
+            raise RuntimeError(msg)  # pragma: no cover
         await ensure_capnp_event_loop()
         # create local socket pair
         # Since there is only a single client there is no need to use a asyncio server

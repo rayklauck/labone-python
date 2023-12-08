@@ -30,6 +30,7 @@ Already predefined behaviour:
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import fnmatch
 import re
 import time
@@ -46,12 +47,20 @@ from labone.core.value import (
     Value,
     _value_from_python_types_dict,
 )
+from labone.mock.errors import LabOneMockError
 from labone.mock.session_mock_functionality import SessionMockFunctionality
 
 if t.TYPE_CHECKING:
     from labone.core.helper import LabOneNodePath
     from labone.core.session import NodeInfo
     from labone.core.subscription import StreamingHandle
+
+
+@dataclass
+class PathData:
+    value: Value
+    info: NodeInfo
+    streaming_handles: list[StreamingHandle]
 
 
 class AutomaticSessionFunctionality(SessionMockFunctionality):
@@ -63,20 +72,15 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
 
     def __init__(
         self,
-        paths_to_info: dict[LabOneNodePath, NodeInfo] | None = None,
+        paths_to_info: dict[LabOneNodePath, NodeInfo],
     ) -> None:
-        if paths_to_info is None:
-            paths_to_info = {}
 
-        # remembering tree structure
-        self._paths_to_info = paths_to_info
-        # storing state
-        self._memory: dict[LabOneNodePath, Value] = {}
-        # storing subscriptions
-        self._path_to_streaming_handles: dict[
-            LabOneNodePath,
-            list[StreamingHandle],
-        ] = {}
+        # storing state and tree structure, info and subscriptions
+        # set all existing paths to 0.
+        self.memory: dict[LabOneNodePath, PathData] = {
+            path: PathData(value=0, info=info, streaming_handles=[])
+            for path, info in paths_to_info.items()
+        }
 
     def _get_timestamp(self) -> int:
         return time.clock_gettime_ns(time.CLOCK_MONOTONIC)
@@ -93,6 +97,8 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
 
         Warning:
             Flags will be ignored in this implementation. (TODO)
+            For now, the behaviour is equivalent to
+            ListNodesFlags.RECURSIVE | ListNodesFlags.ABSOLUTE
 
         Args:
             path: Path to narrow down which nodes should be listed. Omitting
@@ -102,13 +108,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         Returns:
             Dictionary of paths to node info.
         """
-        if path == "":
-            return self._paths_to_info
-        if path[-1] != "*":
-            path = path + "/*"
-        return {
-            k: v for k, v in self._paths_to_info.items() if fnmatch.fnmatch(k, path)
-        }
+        return {p: self.memory[p].info for p in await self.list_nodes(path=path)}
 
     async def list_nodes(
         self,
@@ -122,6 +122,8 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
 
         Warning:
             Flags will be ignored in this implementation. (TODO)
+            For now, the behaviour is equivalent to
+            ListNodesFlags.RECURSIVE | ListNodesFlags.ABSOLUTE
 
         Args:
             path: Path to narrow down which nodes should be listed. Omitting
@@ -131,11 +133,16 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         Returns:
             List of paths.
         """
-        if path == "":
-            return list(self._paths_to_info.keys())
-        if path[-1] != "*":
-            path = path + "/*"
-        return fnmatch.filter(self._paths_to_info.keys(), path)
+        if path in [""]:
+            return []
+        return [
+            p
+            for p in self.memory.keys()
+            if fnmatch.fnmatch(p, path)
+            or fnmatch.fnmatch(p, path + "*")
+            or fnmatch.fnmatch(p, path + "/*")
+            or p == path
+        ]
 
     async def get(self, path: LabOneNodePath) -> AnnotatedValue:
         """Predefined behaviour for get.
@@ -148,10 +155,12 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         Returns:
             Corresponding value.
         """
-        value = self._memory.get(
-            path,
-            "not found in mock memory",
-        )
+        try:
+            value = self.memory[path].value
+        except KeyError as e:
+            raise LabOneMockError(
+                f"Path {path} not found in mock server. Cannot get it."
+            ) from e
         response = AnnotatedValue(path=path, value=value)
         response.timestamp = self._get_timestamp()
         return response
@@ -178,13 +187,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         Returns:
             List of values, corresponding to nodes of the path expression.
         """
-        return [
-            await self.get(p)
-            for p in resolve_wildcards_labone(
-                path_expression,
-                await self.list_nodes(path=path_expression),
-            )
-        ]
+        return [await self.get(p) for p in await self.list_nodes(path=path_expression)]
 
     async def set(self, value: AnnotatedValue) -> AnnotatedValue:  # noqa: A003
         """Predefined behaviour for set.
@@ -198,25 +201,31 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         Returns:
             Acknowledged value.
         """
-        self._memory[value.path] = value.value
-        response = value
-        response.timestamp = self._get_timestamp()
+        if value.path not in self.memory:
+            raise LabOneMockError(
+                f"Path {value.path} not found in mock server. Cannot set it."
+            )
+        self.memory[value.path].value = value.value
+
+        timestamp = self._get_timestamp()
 
         capnp_response = {
-            "value": _value_from_python_types_dict(response),
+            "value": _value_from_python_types_dict(value),
             "metadata": {
-                "path": response.path,
-                "timestamp": response.timestamp,
+                "path": value.path,
+                "timestamp": timestamp,
             },
         }
         # sending updated value to subscriptions
         await asyncio.gather(
             *[
                 handle.sendValues([capnp_response])
-                for handle in self._path_to_streaming_handles.get(value.path, [])
+                for handle in self.memory[value.path].streaming_handles
             ],
         )
 
+        response = value
+        response.timestamp = timestamp
         return response
 
     async def set_with_expression(self, value: AnnotatedValue) -> list[AnnotatedValue]:
@@ -233,10 +242,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         """
         return [
             await self.set(AnnotatedValue(value=value.value, path=p))
-            for p in resolve_wildcards_labone(
-                value.path,
-                await self.list_nodes(value.path),
-            )
+            for p in await self.list_nodes(value.path)
         ]
 
     async def subscribe_logic(
@@ -256,25 +262,4 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
             streaming_handle: Streaming handle of the subscriber.
             subscriber_id: Id of the subscriber.
         """
-        if path not in self._path_to_streaming_handles:
-            self._path_to_streaming_handles[path] = []
-        self._path_to_streaming_handles[path].append(streaming_handle)
-
-
-def resolve_wildcards_labone(path: str, nodes: list[str]) -> list[str]:
-    """Resolves potential wildcards.
-
-    In addition to the wildcard, this function also resolves partial nodes to
-    its leaf nodes.
-
-    Args:
-        path: Path to resolve.
-        nodes: List of nodes to resolve against.
-
-    Returns:
-        List of matched nodes in the raw path format
-    """
-    node_raw = re.escape(path)
-    node_raw = node_raw.replace("/\\*/", "/[^/]*/").replace("/\\*", "/*") + "(/.*)?$"
-    node_raw_regex = re.compile(node_raw)
-    return list(filter(node_raw_regex.match, nodes))
+        self.memory[path].streaming_handles.append(streaming_handle)

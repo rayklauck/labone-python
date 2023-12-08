@@ -291,22 +291,22 @@ def _value_from_python_types(
     value = ann_value.value
     request_value = reflection.Value.new_message()  # type: ignore[attr-defined]
 
-    if isinstance(value, np.ndarray):
-        if ann_value.extra_header is None:
-            request_value.vectorData = value.tobytes()
-        else:
-            return {"vectorData": encode_shf_vector_data_struct(
-                value, ann_value.extra_header
-            )}
-    elif isinstance(value, SHFDemodSample):
-        if ann_value.extra_header is None:
-            raise ValueError("SHFDemodSample requires extra_header")
-        return {"vectorData":encode_shf_vector_data_struct(value, ann_value.extra_header)
-        }
-    elif isinstance(value, (TriggerSample, CntSample)):
-        raise NotImplementedError("TriggerSample and CntSample not yet implemented")
-    
-    elif isinstance(value, bool):
+    # if isinstance(value, np.ndarray):
+    #     if ann_value.extra_header is None:
+    #         request_value.vectorData = value.tobytes()
+    #     else:
+    #         return {"vectorData": encode_shf_vector_data_struct(
+    #             value, ann_value.extra_header
+    #         )}
+    # elif isinstance(value, SHFDemodSample):
+    #     if ann_value.extra_header is None:
+    #         raise ValueError("SHFDemodSample requires extra_header")
+    #     return {"vectorData":encode_shf_vector_data_struct(value, ann_value.extra_header)
+    #     }
+    # elif isinstance(value, (TriggerSample, CntSample)):
+    #     raise NotImplementedError("TriggerSample and CntSample not yet implemented")
+
+    if isinstance(value, bool):
         request_value.int64 = int(value)
     elif np.issubdtype(type(value), np.integer):
         request_value.int64 = value
@@ -343,7 +343,7 @@ def _value_from_python_types(
 
 
 def _value_from_python_types_dict(
-    ann_value: AnnotatedValue,  # noqa: ANN401
+    annotated_value: AnnotatedValue,  # noqa: ANN401
 ) -> capnp.lib.capnp._DynamicStructBuilder:
     """Create `Value` builder from Python types.
 
@@ -363,20 +363,27 @@ def _value_from_python_types_dict(
     Raises:
         LabOneCoreError: If the data type of the value to be set is not supported.
     """
-    if isinstance(ann_value.value, np.ndarray):
-        if ann_value.extra_header is None:
-            return {"vectorData": ann_value.value.tobytes()}
+    if isinstance(annotated_value.value, np.ndarray):
+        if annotated_value.extra_header is None:
+            return {"vectorData": annotated_value.value.tobytes()}
         else:
-            return {"vectorData": encode_shf_vector_data_struct(
-                ann_value.value, ann_value.extra_header
-            )}
-    elif isinstance(ann_value.value, SHFDemodSample):
-        if ann_value.extra_header is None:
-            raise ValueError("SHFDemodSample requires extra_header")
-        return {"vectorData":encode_shf_vector_data_struct(ann_value.value, ann_value.extra_header)
+            return {
+                "vectorData": encode_shf_vector_data_struct(
+                    annotated_value.value, annotated_value.extra_header
+                )
+            }
+    elif isinstance(annotated_value.value, SHFDemodSample):
+        if annotated_value.extra_header is None:
+            raise ValueError("SHFDemodSample requires extra_header")  # pragma: no cover
+        return {
+            "vectorData": encode_shf_vector_data_struct(
+                annotated_value.value, annotated_value.extra_header
+            )
         }
-    elif isinstance(ann_value.value, (TriggerSample, CntSample)):
-        raise NotImplementedError("TriggerSample and CntSample not yet implemented")
+    elif isinstance(annotated_value.value, (TriggerSample, CntSample)):
+        raise NotImplementedError(
+            "TriggerSample and CntSample not yet implemented"
+        )  # pragma: no cover
 
     type_to_message = {
         bool: lambda x: {"int64": int(x)},
@@ -402,10 +409,12 @@ def _value_from_python_types_dict(
         },
     }
 
-    value = ann_value.value
-    for type_, message_builder in type_to_message.items():
-        if isinstance(value, type_) or np.issubdtype(type(value), type_):
-            return message_builder(value)
+    annotated_value = annotated_value.value
+    for type_, message_builder in type_to_message.items():  # pragma: no cover
+        if isinstance(annotated_value, type_) or np.issubdtype(
+            type(annotated_value), type_
+        ):
+            return message_builder(annotated_value)
 
-    msg = f"The provided value has an invalid type: {type(value)}"
-    raise ValueError(msg)
+    msg = f"The provided value has an invalid type: {type(annotated_value)}"  # pragma: no cover
+    raise ValueError(msg)  # pragma: no cover

@@ -6,6 +6,15 @@ to define an individual mock server. The signature of the methods
 is mostly identical to the session-interface on the caller side.
 Thereby it feels as if the session-interface is overritten directly,
 hiding the capnp server logic from the user.
+
+Two possible ways to use this class arise:
+ * Call methods indirectly (via capnp server), by having a session
+   to a mock server.
+ * Call methods directly. This can be used to manipulate the state
+   internally. Limitations of what can be set to a server are
+   bypassed. E.g. can be useful when setting shf vector nodes.
+
+Both approaches can be combined.
 """
 
 from __future__ import annotations

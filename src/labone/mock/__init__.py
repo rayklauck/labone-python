@@ -21,4 +21,8 @@ from labone.mock.automatic_session_functionality import AutomaticSessionFunction
 from labone.mock.entry_point import spawn_hpk_mock
 from labone.mock.session_mock_functionality import SessionMockFunctionality
 
-__all__ = ["spawn_hpk_mock", "AutomaticSessionFunctionality", "SessionMockFunctionality"]
+__all__ = [
+    "spawn_hpk_mock",
+    "AutomaticSessionFunctionality",
+    "SessionMockFunctionality",
+]
