@@ -8,11 +8,9 @@ from labone.core.shf_vector_data import (
     ShfResultLoggerVectorExtraHeader,
     ShfScopeVectorExtraHeader,
     VectorValueType,
+    encode_shf_vector_data_struct,
     get_header_length,
     parse_shf_vector_data_struct,
-    encode_shf_vector_data_struct,
-    ExtraHeader,
-    _HeaderVersion,
 )
 
 
@@ -267,7 +265,20 @@ class GetAttrAbleDict(dict):
     ("header", "data"),
     [
         (
-            ShfScopeVectorExtraHeader(0, 0, False, 3.0, 7, 0, 0, 1, 1, 1, 1, 0),
+            ShfScopeVectorExtraHeader(
+                0,
+                0,
+                False,  # noqa: FBT003
+                3.0,
+                7,
+                0,
+                0,
+                1,
+                1,
+                1,
+                1,
+                0,
+            ),
             np.array([6 + 6j, 3 + 3j], dtype=np.complex64),
         ),
         (
@@ -294,9 +305,23 @@ def test_encoding_decoding_are_invers(header, data):
     ("header", "data"),
     [
         (
-            ShfDemodulatorVectorExtraHeader(0, 0, False, 0, 0, 0, 0, 0, 0.5, -3, 0, 0),
+            ShfDemodulatorVectorExtraHeader(
+                0,
+                0,
+                False,  # noqa: FBT003
+                0,
+                0,
+                0,
+                0,
+                0,
+                0.5,
+                -3,
+                0,
+                0,
+            ),
             SHFDemodSample(
-                np.array([6, 3], dtype=np.int64), np.array([7, 2], dtype=np.int64)
+                np.array([6, 3], dtype=np.int64),
+                np.array([7, 2], dtype=np.int64),
             ),
         ),
     ],
@@ -315,3 +340,58 @@ def test_encoding_decoding_are_invers_shf_demod_sample(header, data):
     assert extracted_header == header
     assert np.array_equal(extracted_data.x, data_copy.x)
     assert np.array_equal(extracted_data.y, data_copy.y)
+
+
+@pytest.mark.parametrize(
+        ("header", "data"),
+    [
+        (
+            ShfDemodulatorVectorExtraHeader(
+                0,
+                0,
+                False,  # noqa: FBT003
+                0,
+                0,
+                0,
+                0,
+                0,
+                0.5,
+                -3,
+                0,
+                0,
+            ),
+            np.array([50 + 100j, 100 + 150j], dtype=np.complex64),
+        ),
+        (
+            ShfScopeVectorExtraHeader(
+                0,
+                0,
+                False,  # noqa: FBT003
+                3.0,
+                7,
+                0,
+                0,
+                1,
+                1,
+                1,
+                1,
+                0,
+            ),
+            SHFDemodSample(
+                np.array([6, 3], dtype=np.int64),
+                np.array([7, 2], dtype=np.int64),
+            ),
+        ),
+        (
+            ShfResultLoggerVectorExtraHeader(0, 0, 50, 0),
+            SHFDemodSample(
+                np.array([6, 3], dtype=np.int64),
+                np.array([7, 2], dtype=np.int64),
+            ),
+        ),
+    ],
+)
+@pytest.mark.asyncio()
+async def test_encode_shf_vector_wrong_data_header_combination_raises(header, data):
+    with pytest.raises(Exception):  # noqa: B017
+        encode_shf_vector_data_struct(data, header)

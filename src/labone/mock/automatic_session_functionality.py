@@ -30,25 +30,19 @@ Already predefined behaviour:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 import fnmatch
-import re
 import time
 import typing as t
-
-import numpy as np
+from dataclasses import dataclass
 
 from labone.core import ListNodesFlags, ListNodesInfoFlags
-from labone.core.shf_vector_data import SHFDemodSample, encode_shf_vector_data_struct
 from labone.core.value import (
     AnnotatedValue,
-    CntSample,
-    TriggerSample,
     Value,
     _value_from_python_types_dict,
 )
 from labone.mock.errors import LabOneMockError
-from labone.mock.session_mock_functionality import SessionMockFunctionality
+from labone.mock.session_mock_template import SessionMockFunctionality
 
 if t.TYPE_CHECKING:
     from labone.core.helper import LabOneNodePath
@@ -58,6 +52,7 @@ if t.TYPE_CHECKING:
 
 @dataclass
 class PathData:
+    """Data stored for each path in the mock server."""
     value: Value
     info: NodeInfo
     streaming_handles: list[StreamingHandle]
@@ -74,7 +69,6 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         self,
         paths_to_info: dict[LabOneNodePath, NodeInfo],
     ) -> None:
-
         # storing state and tree structure, info and subscriptions
         # set all existing paths to 0.
         self.memory: dict[LabOneNodePath, PathData] = {
@@ -83,7 +77,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         }
 
     def _get_timestamp(self) -> int:
-        return time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+        return time.monotonic_ns()
 
     async def list_nodes_info(
         self,
@@ -137,7 +131,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
             return []
         return [
             p
-            for p in self.memory.keys()
+            for p in self.memory
             if fnmatch.fnmatch(p, path)
             or fnmatch.fnmatch(p, path + "*")
             or fnmatch.fnmatch(p, path + "/*")
@@ -158,9 +152,8 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
         try:
             value = self.memory[path].value
         except KeyError as e:
-            raise LabOneMockError(
-                f"Path {path} not found in mock server. Cannot get it."
-            ) from e
+            msg = f"Path {path} not found in mock server. Cannot get it."
+            raise LabOneMockError(msg) from e
         response = AnnotatedValue(path=path, value=value)
         response.timestamp = self._get_timestamp()
         return response
@@ -202,9 +195,8 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
             Acknowledged value.
         """
         if value.path not in self.memory:
-            raise LabOneMockError(
-                f"Path {value.path} not found in mock server. Cannot set it."
-            )
+            msg = f"Path {value.path} not found in mock server. Cannot set it."
+            raise LabOneMockError(msg)
         self.memory[value.path].value = value.value
 
         timestamp = self._get_timestamp()

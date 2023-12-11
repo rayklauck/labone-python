@@ -1,6 +1,6 @@
 """AB test to ensure that the mock behaves like the real hpk in required aspects.
 
-These tests run the same commands on a real hpk and the mock server. If the 
+These tests run the same commands on a real hpk and the mock server. If the
 behavior is the same, the tests pass. If the behavior is different, the test
 fails. This is to ensure that the mock server behaves like the real hpk in
 required aspects.
@@ -18,33 +18,25 @@ which version of the hpk the mock server is compared.
 """
 
 
-from contextlib import redirect_stdout
-from functools import wraps
 import io
+from contextlib import redirect_stdout
+
 import pytest
-from labone.core.reflection.server import ReflectionServer
-import numpy as np
-from labone.core.session import ListNodesFlags, ListNodesInfoFlags, Session
+from labone.core import AnnotatedValue, KernelSession, ServerInfo, ZIKernelInfo
+from labone.core.session import ListNodesFlags, Session
 from labone.mock import spawn_hpk_mock
 from labone.mock.automatic_session_functionality import AutomaticSessionFunctionality
-from labone.core import KernelSession, ZIKernelInfo, ServerInfo, AnnotatedValue
 from labone.mock.entry_point import MockSession
-from labone.mock.mock_server import MockServer
-import inspect
 
 
 async def get_session():
-    try:
-        return await KernelSession.create(
-            kernel_info=ZIKernelInfo(),
-            server_info=ServerInfo(host="localhost", port=8004),
-        )
-    except:
-        return False
+    return await KernelSession.create(
+        kernel_info=ZIKernelInfo(),
+        server_info=ServerInfo(host="localhost", port=8004),
+    )
 
 
 async def get_mock_session() -> MockSession:
-
     # make sure to work on same node tree as real session
     session = await get_session()
     paths_to_info = await session.list_nodes_info("*")
@@ -73,13 +65,13 @@ def same_prints_for_real_and_mock(test_function):
 
         with redirect_stdout(string_output_mock, *args, **kwargs):
             await test_function(mock_session)
-        print(string_output_mock.getvalue())
+
         assert string_output.getvalue() == string_output_mock.getvalue()
 
     return new_test_function
 
 
-@pytest.mark.mock_compatibility
+@pytest.mark.mock_compatibility()
 @pytest.mark.parametrize(
     "path",
     [
@@ -97,7 +89,7 @@ def same_prints_for_real_and_mock(test_function):
         "/zi/debug/level/*/*",
     ],
 )
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_list_nodes_compatible(path):
     async def procedure(session):
         nodes = await session.list_nodes(
@@ -107,12 +99,12 @@ async def test_list_nodes_compatible(path):
             | ListNodesFlags.LEAVES_ONLY,
         )
 
-        print(sorted(nodes))
+        print(sorted(nodes))  # noqa: T201
 
     await same_prints_for_real_and_mock(procedure)()
 
 
-@pytest.mark.mock_compatibility
+@pytest.mark.mock_compatibility()
 @pytest.mark.parametrize(
     "path",
     [
@@ -130,7 +122,7 @@ async def test_list_nodes_compatible(path):
         "/zi/debug/level/*/*",
     ],
 )
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_list_nodes_info_compatible(path):
     session = await get_session()
     mock_session = await get_mock_session()
@@ -146,18 +138,17 @@ async def test_list_nodes_info_compatible(path):
     assert nodes == mock_nodes
 
 
-@pytest.mark.mock_compatibility
-@pytest.mark.asyncio
+@pytest.mark.mock_compatibility()
+@pytest.mark.asyncio()
 @same_prints_for_real_and_mock
 async def test_state_keeping_compatible(session: Session):
-
     await session.set(AnnotatedValue(path="/zi/debug/level", value=1))
     result = await session.get("/zi/debug/level")
 
-    print(result.path, result.value, result.extra_header)
+    print(result.path, result.value, result.extra_header)  # noqa: T201
 
 
-@pytest.mark.mock_compatibility
+@pytest.mark.mock_compatibility()
 @pytest.mark.parametrize(
     "expression",
     [
@@ -175,11 +166,11 @@ async def test_state_keeping_compatible(session: Session):
         "/zi/debug/level/*/*",
     ],
 )
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_get_with_expression_compatible(expression):
     async def procedure(session):
         result = await session.get_with_expression(expression)
 
-        print(sorted([r.path for r in result]))
+        print(sorted([r.path for r in result]))  # noqa: T201
 
     await same_prints_for_real_and_mock(procedure)()

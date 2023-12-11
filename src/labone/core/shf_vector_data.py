@@ -13,6 +13,7 @@ field of the vector data. The extra header is then followed by the data.
 from __future__ import annotations
 
 import struct
+import typing as t
 from dataclasses import dataclass
 from typing import Union
 
@@ -89,7 +90,15 @@ class ShfResultLoggerVectorExtraHeader:
         )
         raise NotImplementedError(msg)
 
-    def to_binary(self):
+    def to_binary(self) -> bytes:
+        """Pack the extra header into a binary string.
+
+        Warning:
+            This encoding is compatible with version.minor >= 1.
+
+        Returns:
+            The binary string representing the extra header.
+        """
         return struct.pack(
             "qIdd",
             self.timestamp,
@@ -195,7 +204,15 @@ class ShfScopeVectorExtraHeader:
         )
         raise NotImplementedError(msg)
 
-    def to_binary(self):
+    def to_binary(self) -> bytes:
+        """Pack the extra header into a binary string.
+
+        Warning:
+            This encoding is compatible with version.minor >= 2.
+
+        Returns:
+            The binary string representing the extra header.
+        """
         return struct.pack(
             "qIBddqIIIIII",
             self.timestamp,
@@ -317,10 +334,14 @@ class ShfDemodulatorVectorExtraHeader:
         )
         raise NotImplementedError(msg)
 
-    def to_binary(self):
-        """
+    def to_binary(self) -> bytes:
+        """Pack the extra header into a binary string.
 
-        Warning: Also works with version.minor >= 2.
+        Warning:
+            Also works with version.minor >= 2.
+
+        Returns:
+            The binary string representing the extra header.
         """
         timebase = 2.5e-10
         max_demod_rate = 5e7
@@ -552,16 +573,31 @@ def parse_shf_vector_data_struct(
 def encode_shf_vector_data_struct(
     data: np.ndarray | SHFDemodSample,
     extra_header: ExtraHeader,
-    version: _HeaderVersion = _HeaderVersion(major=2, minor=2),
 ) -> CapnpCapability:
-    """Encode the SHF vector data struct."""
+    """Encode the SHF vector data struct.
+
+    Build a capnp struct (in form of a dictionary) from data and
+    extra header to send.
+
+    Args:
+        data: The vector data.
+        extra_header: The extra header.
+
+    Returns:
+        The capnp struct to send.
+    """
+    # other versions not supported at the moment
+    version: _HeaderVersion = _HeaderVersion(major=2, minor=2)
 
     if isinstance(extra_header, ShfScopeVectorExtraHeader):
+        if not isinstance(data, np.ndarray):
+            msg = "data must be of type np.ndarray for ShfScopeVectorExtraHeader"
+            raise TypeError(msg)
         value_type = VectorValueType.SHF_SCOPE_VECTOR_DATA
 
         # actually, this should be type int32, but signed int32 not supported
         # by the type enum. Using unsigned uint32 for transmission.
-        vector_element_type_np = np.uint32
+        vector_element_type_np: t.Any = np.uint32
 
         data /= extra_header.scaling
 
@@ -572,6 +608,13 @@ def encode_shf_vector_data_struct(
         data_to_send_np[1::2] = data.imag
 
     elif isinstance(extra_header, ShfDemodulatorVectorExtraHeader):
+        if not isinstance(data, SHFDemodSample):
+            msg = (
+                "data must be of type SHFDemodSample "
+                "for ShfDemodulatorVectorExtraHeader"
+            )
+            raise TypeError(msg)
+
         value_type = VectorValueType.SHF_DEMODULATOR_VECTOR_DATA
 
         # actually, this should be type int64, but signed int64 not supported
@@ -587,6 +630,10 @@ def encode_shf_vector_data_struct(
 
     else:
         # extra_header is a ShfResultLoggerVectorExtraHeader
+        if not isinstance(data, np.ndarray):
+            msg = "data must be of type np.ndarray for ShfResultLoggerVectorExtraHeader"
+            raise TypeError(msg)
+
         value_type = VectorValueType.SHF_RESULT_LOGGER_VECTOR_DATA
         vector_element_type_np = data.dtype
         data_to_send_np = data
@@ -605,7 +652,7 @@ def encode_shf_vector_data_struct(
     return {
         "valueType": value_type.value,
         "vectorElementType": VectorElementType.from_numpy_type(
-            vector_element_type_np
+            vector_element_type_np,
         ).value,
         "extraHeaderInfo": extra_header_info,
         "data": extra_header_bytes + data_to_send_np.tobytes(),

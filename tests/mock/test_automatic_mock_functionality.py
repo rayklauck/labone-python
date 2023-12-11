@@ -2,22 +2,21 @@
 Scope: AutomaticSessionFunctionality
 """
 
+from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import Mock
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pytest
-from labone.core.helper import LabOneNodePath
-from labone.core.shf_vector_data import SHFDemodSample
+
+if TYPE_CHECKING:
+    from labone.core.helper import LabOneNodePath
 from labone.core.value import AnnotatedValue, Value
 from labone.mock import AutomaticSessionFunctionality
-from labone.mock.automatic_session_functionality import PathData
-from labone.mock.mock_server import MockServer
-from labone.mock.session_mock_template import SessionMockTemplate
 
 
 async def get_functionality_with_state(state: dict[LabOneNodePath, Value]):
-    functionality = AutomaticSessionFunctionality({path: {} for path in state.keys()})
+    functionality = AutomaticSessionFunctionality({path: {} for path in state})
     for path, value in state.items():
         await functionality.set(AnnotatedValue(value=value, path=path))
     return functionality
@@ -33,14 +32,14 @@ async def check_state_agrees_with(
     return True
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_remembers_state():
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
     await functionality.set(AnnotatedValue(value=123, path="/a/b"))
     assert (await functionality.get("/a/b")).value == 123
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_state_overwritable():
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
     await functionality.set(AnnotatedValue(value=123, path="/a/b"))
@@ -48,7 +47,7 @@ async def test_state_overwritable():
     assert (await functionality.get("/a/b")).value == 456
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_seperate_state_per_path():
     functionality = AutomaticSessionFunctionality({"/a/b": {}, "/a/c": {}})
     await functionality.set(AnnotatedValue(value=123, path="/a/b"))
@@ -57,24 +56,24 @@ async def test_seperate_state_per_path():
     assert (await functionality.get("/a/c")).value == 456
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_cannot_get_outside_of_tree_structure():
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # noqa: B017
         await functionality.get("/a/c")
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_cannot_set_outside_of_tree_structure():
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # noqa: B017
         await functionality.set(AnnotatedValue(value=123, path="/a/c"))
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_list_nodes_answered_by_tree_structure():
     functionality = AutomaticSessionFunctionality(
-        {"/x": {}, "/x/y": {}, "/v/w/q/a": {}}
+        {"/x": {}, "/x/y": {}, "/v/w/q/a": {}},
     )
     assert set(await functionality.list_nodes("*")) == {"/x", "/x/y", "/v/w/q/a"}
 
@@ -104,7 +103,7 @@ async def test_list_nodes_answered_by_tree_structure():
         ({"/a/b": {}, "/a/c": {}}, "/*", {"/a/b": {}, "/a/c": {}}),
     ],
 )
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_list_nodes_info(path_to_info, path, expected):
     functionality = AutomaticSessionFunctionality(path_to_info)
     assert await functionality.list_nodes_info(path) == expected
@@ -130,31 +129,13 @@ async def test_list_nodes_info(path_to_info, path, expected):
         "/*",
     ],
 )
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_consistency_list_nodes_vs_list_nodes_info(path_to_info, path):
     functionality = AutomaticSessionFunctionality(path_to_info)
 
     assert set((await functionality.list_nodes_info(path)).keys()) == set(
-        await functionality.list_nodes(path)
+        await functionality.list_nodes(path),
     )
-
-
-# @pytest.mark.parametrize(
-#     ("nodes", "path", "expected"),
-#     [
-#         ([], "", []),
-#         (["/a/b"], "", ["/a/b"]),
-#         (["/a/b"], "/*", ["/a/b"]),
-#         (["/a/b"], "/a/*", ["/a/b"]),
-#         (["/a/b"], "/*/*", ["/a/b"]),
-#         (["/a/b/c","/a/b/d"], "/a/b/*", ["/a/b/c","/a/b/d"]),
-#         (["/a/b/c","/a/b/d"], "/a", ["/a/b/c","/a/b/d"]),
-#         (["/a/b/c","/a/b/d"], "/a/b/c", ["/a/b/c"]),
-#         (["/a/b/c","/a/b","/b/b/d"], "/a", ["/a/b/c","/a/b"]),
-#         ]
-#     )
-# def test_resolve_wildcards_labone(nodes, path, expected):
-#     assert resolve_wildcards_labone(path, nodes) == expected
 
 
 @pytest.mark.parametrize(
@@ -168,7 +149,7 @@ async def test_consistency_list_nodes_vs_list_nodes_info(path_to_info, path):
         ("/a/x", {3, 4}),
     ],
 )
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_get_with_expression(expression, expected):
     functionality = await get_functionality_with_state(
         {
@@ -177,7 +158,7 @@ async def test_get_with_expression(expression, expected):
             "/a/x": 3,
             "/a/x/y": 4,
             "/b": 5,
-        }
+        },
     )
     assert {
         ann.value for ann in (await functionality.get_with_expression(expression))
@@ -203,7 +184,7 @@ async def test_get_with_expression(expression, expected):
         ),
     ],
 )
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_set_with_expression(expression, value, expected_new_state):
     functionality = await get_functionality_with_state(
         {
@@ -212,50 +193,57 @@ async def test_set_with_expression(expression, value, expected_new_state):
             "/a/x": 3,
             "/a/x/y": 4,
             "/b": 5,
-        }
+        },
     )
 
     await functionality.set_with_expression(
-        AnnotatedValue(value=value, path=expression)
+        AnnotatedValue(value=value, path=expression),
     )
 
-    # assert {ann.value for ann in (await functionality.get_with_expression(expression))} == expected
     assert await check_state_agrees_with(functionality, expected_new_state)
 
 
-# @pytest.mark.asyncio
-# async def test_prevent_server_from_being_started_twice():
-#     functionality = AutomaticSessionFunctionality({"/a/b": {}})
-#     mock_server = MockServer(
-#         capability_bytes=Path(__file__).parent.parent / "resources" / "session.bin",
-#         concrete_server=SessionMockTemplate(functionality),
-#     )
-#     client_connection = await mock_server.start()
-#     with pytest.raises(Exception):
-#         await mock_server.start_server()
-
-
-# complex,
-# np.ndarray,
-# SHFDemodSample,
-# TriggerSample,
-# CntSample,
-# None,
-
-
 @pytest.mark.parametrize(
-    ("value", "equals_function"),
+    "value",
     [
-        (5, lambda a, b: a == b),
-        (6.3, lambda a, b: a == b),
-        ("hello", lambda a, b: a == b),
-        (b"hello", lambda a, b: a == b),
-        (2 + 3j, lambda a, b: a == b),
-        (np.array([1, 2, 3]), lambda a, b: np.all(a == b)),
+        5,
+        6.3,
+        "hello",
+        b"hello",
+        2 + 3j,
     ],
 )
-@pytest.mark.asyncio
-async def test_handling_of_multiple_data_types(value: Value, equals_function):
+@pytest.mark.asyncio()
+async def test_handling_of_multiple_data_types(value: Value):
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
     await functionality.set(AnnotatedValue(value=value, path="/a/b"))
-    assert equals_function((await functionality.get("/a/b")).value, value)
+    assert (await functionality.get("/a/b")).value == value
+
+
+@pytest.mark.asyncio()
+async def test_handling_of_numpy_array():
+    functionality = AutomaticSessionFunctionality({"/a/b": {}})
+    value = np.array([1, 2, 3])
+    await functionality.set(AnnotatedValue(value=value, path="/a/b"))
+    assert np.all((await functionality.get("/a/b")).value == value)
+
+
+@pytest.mark.asyncio()
+async def test_timestamps_are_increasing():
+    functionality = AutomaticSessionFunctionality({"/a/b": {}})
+
+    # calling set 10 times to ensure higher probability for wrong order,
+    # if timestamps are not increasing
+    responses = [
+        await functionality.set(AnnotatedValue(value=1, path="/a/b")) for _ in range(10)
+    ]
+
+    # calling all functions with timestamp once
+    responses.append(await functionality.get("/a/b"))
+    responses += await functionality.set_with_expression(
+        AnnotatedValue(value=2, path="/a/*"),
+    )
+    responses += await functionality.get_with_expression("/a/*")
+
+    sorted_by_timestamp = sorted(responses, key=lambda x: x.timestamp)
+    assert sorted_by_timestamp == responses

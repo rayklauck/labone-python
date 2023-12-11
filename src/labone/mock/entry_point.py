@@ -4,20 +4,22 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING
-from labone.core.helper import CapnpCapability
+
 from labone.core.reflection.server import ReflectionServer
 from labone.core.session import Session
-
 from labone.mock.mock_server import MockServer
 from labone.mock.session_mock_template import SessionMockTemplate
 
 if TYPE_CHECKING:
-    from labone.mock.session_mock_functionality import SessionMockFunctionality
+    from labone.core.helper import CapnpCapability
+    from labone.mock.session_mock_template import SessionMockFunctionality
 
 
 class MockSession(Session):
-    """
-    This class is designed for holding the mock server. This is needed, because otherwise,
+    """Regular Session holding a mock server.
+
+    This class is designed for holding the mock server.
+    This is needed, because otherwise,
     there would be no reference to the capnp objects, which would go out of scope.
     This way, the correct lifetime of the capnp objects is ensured, by attaching it to
     its client.
@@ -39,12 +41,6 @@ async def spawn_hpk_mock(
 ) -> MockSession:
     """Shortcut for creating a mock server.
 
-    Warning:
-        The mock server is returned as well, even though it is not needed in most cases.
-        At the same time, it needs to be passed hold, at the underlying capnp objects
-        would go out of scope otherwise. This is due to the pycapnp implementation and
-        the c++ capnp implementation.
-
     Args:
         functionality: Functionality to be mocked.
 
@@ -58,7 +54,9 @@ async def spawn_hpk_mock(
             of the concrete server is not in the schema.
 
     Example:
-        >>> mock_server = await spawn_hpk_mock(AutomaticSessionFunctionality(paths_to_info))
+        >>> mock_server = await spawn_hpk_mock(
+                AutomaticSessionFunctionality(paths_to_info)
+            )
 
     """
     mock_server = MockServer(
@@ -68,5 +66,7 @@ async def spawn_hpk_mock(
     client_connection = await mock_server.start()
     reflection_client = await ReflectionServer.create_from_connection(client_connection)
     return MockSession(
-        mock_server, reflection_client.session, reflection_server=reflection_client
+        mock_server,
+        reflection_client.session,  # type: ignore[attr-defined]
+        reflection_server=reflection_client,
     )

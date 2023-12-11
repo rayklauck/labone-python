@@ -3,15 +3,15 @@ Scope: session, capnp (without localhost, but within python),
         server, concrete server, functionality
 
 Subscription behavior can only be tested with a client, holding a queue and
-a mock server on the other side of capnp. Aiming to test the AutomaticSessionFunctionality,
+a mock server on the other side of capnp. Aiming to test the
+AutomaticSessionFunctionality,
 we still need to use a larger scope in order to test meaningful behavior.
 
 """
 
-import pytest
-from labone.core.reflection.server import ReflectionServer
 import numpy as np
-from labone.core.session import ListNodesFlags, ListNodesInfoFlags, Session
+import pytest
+from labone.core import AnnotatedValue
 from labone.core.shf_vector_data import (
     SHFDemodSample,
     ShfDemodulatorVectorExtraHeader,
@@ -20,10 +20,9 @@ from labone.core.shf_vector_data import (
 )
 from labone.mock import spawn_hpk_mock
 from labone.mock.automatic_session_functionality import AutomaticSessionFunctionality
-from labone.core import KernelSession, ZIKernelInfo, ServerInfo, AnnotatedValue
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_useable_via_entry_point():
     """If this crashes, the module is not useable in the desired manner.
     Tests that a session can be established and used.
@@ -35,7 +34,7 @@ async def test_useable_via_entry_point():
     await session.set(AnnotatedValue(path="/a/b", value=7))
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_subscription():
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
     session = await spawn_hpk_mock(functionality)
@@ -46,7 +45,7 @@ async def test_subscription():
     assert queue.empty()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_subscription_multiple_changes():
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
     session = await spawn_hpk_mock(functionality)
@@ -61,7 +60,7 @@ async def test_subscription_multiple_changes():
     assert queue.empty()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_subscription_seperate_for_each_path():
     functionality = AutomaticSessionFunctionality({"/a/b": {}, "/a/c": {}})
     session = await spawn_hpk_mock(functionality)
@@ -76,7 +75,7 @@ async def test_subscription_seperate_for_each_path():
     assert queue2.empty()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_subscription_updated_by_set_with_expression():
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
     session = await spawn_hpk_mock(functionality)
@@ -87,33 +86,23 @@ async def test_subscription_updated_by_set_with_expression():
     assert queue.empty()
 
 
-# @pytest.mark.parametrize(
-
-# )
-@pytest.mark.asyncio
-async def test_shf_scope_vector_handled_correctly_through_set_and_subscription():
-    value = np.array([6 + 6j, 5 + 3j], dtype=np.complex64)
-    extra_header = ShfScopeVectorExtraHeader(0, 0, False, 3.0, 7, 0, 0, 1, 1, 1, 1, 0)
-
-    functionality = AutomaticSessionFunctionality({"/a/b": {}})
-    session = await spawn_hpk_mock(functionality)
-
-    queue = await session.subscribe("/a/b")
-    await session.set(
-        AnnotatedValue(
-            path="/a/b",
-            value=value,
-            timestamp=0,
-            extra_header=extra_header,
-        )
-    )
-    assert list((await queue.get()).value) == list(value)
-
-
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_shf_scope_vector_handled_correctly_through_set_and_subscription():
     value = np.array([6 + 6j, 3 + 3j], dtype=np.complex64)
-    extra_header = ShfScopeVectorExtraHeader(0, 0, False, 3.0, 7, 0, 0, 1, 1, 1, 1, 0)
+    extra_header = ShfScopeVectorExtraHeader(
+        0,
+        0,
+        False,  # noqa: FBT003
+        3.0,
+        7,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+    )
 
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
     session = await spawn_hpk_mock(functionality)
@@ -125,13 +114,13 @@ async def test_shf_scope_vector_handled_correctly_through_set_and_subscription()
             value=value.copy(),
             timestamp=0,
             extra_header=extra_header,
-        )
+        ),
     )
     assert list((await queue.get()).value) == list(value)
 
 
-@pytest.mark.asyncio
-async def test_shf_result_logger_vector_handled_correctly_through_set_and_subscription():
+@pytest.mark.asyncio()
+async def test_shf_result_logger_vector_handled_correctly_in_set_and_subscribe():
     value = np.array([50 + 100j, 100 + 150j], dtype=np.complex64)
     extra_header = ShfResultLoggerVectorExtraHeader(0, 0, 50, 0)
 
@@ -145,18 +134,30 @@ async def test_shf_result_logger_vector_handled_correctly_through_set_and_subscr
             value=value.copy(),
             timestamp=0,
             extra_header=extra_header,
-        )
+        ),
     )
     assert list((await queue.get()).value) == list(value)
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_shf_demodulator_vector_handled_correctly_through_set_and_subscription():
     value = SHFDemodSample(
-        np.array([6, 3], dtype=np.int64), np.array([7, 2], dtype=np.int64)
+        np.array([6, 3], dtype=np.int64),
+        np.array([7, 2], dtype=np.int64),
     )
     extra_header = ShfDemodulatorVectorExtraHeader(
-        0, 0, False, 0, 0, 0, 0, 0, 0.5, -3, 0, 0
+        0,
+        0,
+        False,  # noqa: FBT003
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.5,
+        -3,
+        0,
+        0,
     )
 
     functionality = AutomaticSessionFunctionality({"/a/b": {}})
@@ -169,7 +170,7 @@ async def test_shf_demodulator_vector_handled_correctly_through_set_and_subscrip
             value=SHFDemodSample(x=value.x.copy(), y=value.y.copy()),
             timestamp=0,
             extra_header=extra_header,
-        )
+        ),
     )
     subscription_value = await queue.get()
     assert list(subscription_value.value.x) == list(value.x)

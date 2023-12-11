@@ -101,7 +101,7 @@ class AnnotatedValue:
             field_type = request_field_type_description(message.metadata, "path")
             msg = f"`path` attribute must be of type {field_type}."
             raise TypeError(msg) from None
-        message.value = _value_from_python_types(self, reflection=reflection)
+        message.value = _value_from_python_types(self.value, reflection=reflection)
         return message
 
 
@@ -272,7 +272,7 @@ def _capnp_value_to_python_value(
 
 
 def _value_from_python_types(
-    ann_value: AnnotatedValue,  # noqa: ANN401
+    value: t.Any,  # noqa: ANN401
     *,
     reflection: ReflectionServer,
 ) -> capnp.lib.capnp._DynamicStructBuilder:  # noqa: SLF001
@@ -288,23 +288,7 @@ def _value_from_python_types(
     Raises:
         LabOneCoreError: If the data type of the value to be set is not supported.
     """
-    value = ann_value.value
     request_value = reflection.Value.new_message()  # type: ignore[attr-defined]
-
-    # if isinstance(value, np.ndarray):
-    #     if ann_value.extra_header is None:
-    #         request_value.vectorData = value.tobytes()
-    #     else:
-    #         return {"vectorData": encode_shf_vector_data_struct(
-    #             value, ann_value.extra_header
-    #         )}
-    # elif isinstance(value, SHFDemodSample):
-    #     if ann_value.extra_header is None:
-    #         raise ValueError("SHFDemodSample requires extra_header")
-    #     return {"vectorData":encode_shf_vector_data_struct(value, ann_value.extra_header)
-    #     }
-    # elif isinstance(value, (TriggerSample, CntSample)):
-    #     raise NotImplementedError("TriggerSample and CntSample not yet implemented")
 
     if isinstance(value, bool):
         request_value.int64 = int(value)
@@ -343,19 +327,20 @@ def _value_from_python_types(
 
 
 def _value_from_python_types_dict(
-    annotated_value: AnnotatedValue,  # noqa: ANN401
-) -> capnp.lib.capnp._DynamicStructBuilder:
+    annotated_value: AnnotatedValue,
+) -> capnp.lib.capnp._DynamicStructBuilder:  # noqa: SLF001
     """Create `Value` builder from Python types.
 
     Note:
-        This function is logically equivalent to `_value_from_python_types`.
-        However, it does not require a reflection server as an argument.
+        This function is logically similar to `_value_from_python_types`,
+        except for its extension of handling numpy arrays and shf vectors.
+        However, this function does not require a reflection server as an argument.
         Instead of creating a capnp message via new_message, it does so by
         defining a dictionary as a return value. Both approaches are
         accepted by the capnp library.
 
     Args:
-        value: The value to be converted.
+        annotated_value: The value to be converted.
 
     Returns:
         A new message builder for `capnp:Value`.
@@ -366,24 +351,25 @@ def _value_from_python_types_dict(
     if isinstance(annotated_value.value, np.ndarray):
         if annotated_value.extra_header is None:
             return {"vectorData": annotated_value.value.tobytes()}
-        else:
-            return {
-                "vectorData": encode_shf_vector_data_struct(
-                    annotated_value.value, annotated_value.extra_header
-                )
-            }
-    elif isinstance(annotated_value.value, SHFDemodSample):
-        if annotated_value.extra_header is None:
-            raise ValueError("SHFDemodSample requires extra_header")  # pragma: no cover
         return {
             "vectorData": encode_shf_vector_data_struct(
-                annotated_value.value, annotated_value.extra_header
-            )
+                annotated_value.value,
+                annotated_value.extra_header,
+            ),
         }
-    elif isinstance(annotated_value.value, (TriggerSample, CntSample)):
-        raise NotImplementedError(
-            "TriggerSample and CntSample not yet implemented"
-        )  # pragma: no cover
+    if isinstance(annotated_value.value, SHFDemodSample):
+        if annotated_value.extra_header is None:
+            msg = "SHFDemodSample requires extra_header"  # pragma: no cover
+            raise ValueError(msg)  # pragma: no cover
+        return {
+            "vectorData": encode_shf_vector_data_struct(
+                annotated_value.value,
+                annotated_value.extra_header,
+            ),
+        }
+    if isinstance(annotated_value.value, (TriggerSample, CntSample)):
+        msg = "TriggerSample and CntSample not yet implemented"  # pragma: no cover
+        raise NotImplementedError(msg)  # pragma: no cover
 
     type_to_message = {
         bool: lambda x: {"int64": int(x)},
@@ -409,12 +395,10 @@ def _value_from_python_types_dict(
         },
     }
 
-    annotated_value = annotated_value.value
+    value = annotated_value.value
     for type_, message_builder in type_to_message.items():  # pragma: no cover
-        if isinstance(annotated_value, type_) or np.issubdtype(
-            type(annotated_value), type_
-        ):
-            return message_builder(annotated_value)
+        if isinstance(value, type_) or np.issubdtype(type(value), type_):
+            return message_builder(value)
 
-    msg = f"The provided value has an invalid type: {type(annotated_value)}"  # pragma: no cover
+    msg = f"The provided value has an invalid type: {type(value)}"  # pragma: no cover
     raise ValueError(msg)  # pragma: no cover
