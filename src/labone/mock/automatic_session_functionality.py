@@ -76,7 +76,16 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
             for path, info in paths_to_info.items()
         }
 
-    def _get_timestamp(self) -> int:
+    def get_timestamp(self) -> int:
+        """Create a realisitc timestamp.
+        
+        Call this function to obtain a timestamp for some response.
+        As a internal clock is used, subsequent calls will return
+        increasing timestamps.
+
+        Returns:
+            Timestamp in nanoseconds.
+        """
         return time.monotonic_ns()
 
     async def list_nodes_info(
@@ -155,7 +164,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
             msg = f"Path {path} not found in mock server. Cannot get it."
             raise LabOneMockError(msg) from e
         response = AnnotatedValue(path=path, value=value)
-        response.timestamp = self._get_timestamp()
+        response.timestamp = self.get_timestamp()
         return response
 
     async def get_with_expression(
@@ -199,7 +208,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
             raise LabOneMockError(msg)
         self.memory[value.path].value = value.value
 
-        timestamp = self._get_timestamp()
+        timestamp = self.get_timestamp()
 
         capnp_response = {
             "value": _value_from_python_types_dict(value),
