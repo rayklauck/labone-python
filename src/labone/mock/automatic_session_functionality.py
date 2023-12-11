@@ -53,6 +53,7 @@ if t.TYPE_CHECKING:
 @dataclass
 class PathData:
     """Data stored for each path in the mock server."""
+
     value: Value
     info: NodeInfo
     streaming_handles: list[StreamingHandle]
@@ -78,7 +79,7 @@ class AutomaticSessionFunctionality(SessionMockFunctionality):
 
     def get_timestamp(self) -> int:
         """Create a realisitc timestamp.
-        
+
         Call this function to obtain a timestamp for some response.
         As a internal clock is used, subsequent calls will return
         increasing timestamps.

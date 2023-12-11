@@ -343,7 +343,7 @@ def test_encoding_decoding_are_invers_shf_demod_sample(header, data):
 
 
 @pytest.mark.parametrize(
-        ("header", "data"),
+    ("header", "data"),
     [
         (
             ShfDemodulatorVectorExtraHeader(
