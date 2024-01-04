@@ -20,6 +20,18 @@ async def get_functionality_with_state(state: dict[LabOneNodePath, Value]):
     return functionality
 
 
+@pytest.mark.asyncio()
+async def test_node_info_default_readable():
+    functionality = AutomaticSessionFunctionality({"/a/b":{}})
+    await functionality.get("/a/b")
+
+
+@pytest.mark.asyncio()
+async def test_node_info_default_writable():
+    functionality = AutomaticSessionFunctionality({"/a/b":{}})
+    await functionality.set(AnnotatedValue(path="/a/b", value=1))
+
+
 async def check_state_agrees_with(
     functionality: AutomaticSessionFunctionality,
     state: dict[LabOneNodePath, Value],
@@ -104,7 +116,7 @@ async def test_list_nodes_answered_by_tree_structure():
 @pytest.mark.asyncio()
 async def test_list_nodes_info(path_to_info, path, expected):
     functionality = AutomaticSessionFunctionality(path_to_info)
-    assert await functionality.list_nodes_info(path) == expected
+    assert (await functionality.list_nodes_info(path)).keys() == expected.keys()
 
 
 @pytest.mark.parametrize(

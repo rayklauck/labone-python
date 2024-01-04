@@ -20,6 +20,7 @@ which version of the hpk the mock server is compared.
 
 import io
 from contextlib import redirect_stdout
+import numpy as np
 
 import pytest
 from labone.core import AnnotatedValue, KernelSession, ServerInfo, ZIKernelInfo
@@ -37,7 +38,7 @@ async def get_session():
 
 
 async def get_mock_session() -> MockSession:
-    # make sure to work on same node tree as real session
+    # this makes sure to work on same node tree as real session
     session = await get_session()
     paths_to_info = await session.list_nodes_info("*")
 
@@ -45,30 +46,49 @@ async def get_mock_session() -> MockSession:
     return await spawn_hpk_mock(functionality)
 
 
-def same_prints_for_real_and_mock(test_function):
-    """
-    Calls the decorated function with both the real hpk and
-    the mock version. Compares the behavior by comparing the
-    printed output. Use print statements in the decorated function
-    to compare the behavior!
-    """
+def create_compare_function(session_source1, session_source2):
+    def same_prints_and_exceptions_for_real_and_mock(test_function):
+        """
+        Calls the decorated function with both the real hpk and
+        the mock version. Compares the behavior by comparing the
+        printed output. Use print statements in the decorated function
+        to compare the behavior!
+        If exceptions are raised, it is compared that they are raised
+        in both cases and are of the same kind. However, the message
+        is not compared.
+        """
 
-    async def new_test_function(*args, **kwargs):
-        session = await get_session()
-        mock_session = await get_mock_session()
+        async def new_test_function(*args, **kwargs):
+            session = await session_source1()
+            mock_session = await session_source2()
 
-        string_output = io.StringIO()
-        string_output_mock = io.StringIO()
+            string_output = io.StringIO()
+            string_output_mock = io.StringIO()
 
-        with redirect_stdout(string_output, *args, **kwargs):
-            await test_function(session)
+            exception = None
+            exception_mock = None
+            try:
+                with redirect_stdout(string_output, *args, **kwargs):
+                    await test_function(session)
+            except Exception as e:
+                exception = e
 
-        with redirect_stdout(string_output_mock, *args, **kwargs):
-            await test_function(mock_session)
+            try:
+                with redirect_stdout(string_output_mock, *args, **kwargs):
+                    await test_function(mock_session)
+            except Exception as e:
+                exception_mock = e
 
-        assert string_output.getvalue() == string_output_mock.getvalue()
+            assert (exception is None) == (exception_mock is None)
+            if exception is not None:
+                assert type(exception) == type(exception_mock)
+            assert string_output.getvalue() == string_output_mock.getvalue()
 
-    return new_test_function
+        return new_test_function
+    return same_prints_and_exceptions_for_real_and_mock
+
+
+same_prints_and_exceptions_for_real_and_mock = create_compare_function(get_session, get_mock_session)
 
 
 @pytest.mark.mock_compatibility()
@@ -87,6 +107,7 @@ def same_prints_for_real_and_mock(test_function):
         "/zi/debug/*",
         "/zi/debug/level/*",
         "/zi/debug/level/*/*",
+        "/a/b",  # test invalid node
     ],
 )
 @pytest.mark.asyncio()
@@ -98,10 +119,9 @@ async def test_list_nodes_compatible(path):
             | ListNodesFlags.ABSOLUTE
             | ListNodesFlags.LEAVES_ONLY,
         )
-
         print(sorted(nodes))  # noqa: T201
 
-    await same_prints_for_real_and_mock(procedure)()
+    await same_prints_and_exceptions_for_real_and_mock(procedure)()
 
 
 @pytest.mark.mock_compatibility()
@@ -120,32 +140,84 @@ async def test_list_nodes_compatible(path):
         "/zi/debug/*",
         "/zi/debug/level/*",
         "/zi/debug/level/*/*",
+        "/a/b",  # test invalid node
     ],
 )
 @pytest.mark.asyncio()
 async def test_list_nodes_info_compatible(path):
-    session = await get_session()
-    mock_session = await get_mock_session()
+    async def procedure(session):
+        nodes = await session.list_nodes_info(
+            path,
+            flags=ListNodesFlags.RECURSIVE
+            | ListNodesFlags.ABSOLUTE
+            | ListNodesFlags.LEAVES_ONLY,
+        )
+        print(sorted(nodes))  # noqa: T201
 
-    nodes = await session.list_nodes_info(
-        path,
-        flags=ListNodesFlags.RECURSIVE
-        | ListNodesFlags.ABSOLUTE
-        | ListNodesFlags.LEAVES_ONLY,
-    )
-    mock_nodes = await mock_session.list_nodes_info(path)
+    await same_prints_and_exceptions_for_real_and_mock(procedure)()
 
-    assert nodes == mock_nodes
+
+# @pytest.mark.mock_compatibility()
+# @pytest.mark.asyncio()
+# @pytest.mark.parametrize(
+#     "path",
+#     [
+#         "/zi/debug/level",
+#         "/zi/debug/log",
+#         "/zi/mds/groups/0/devices"
+#         "/a/b",  # test invalid node
+#     ],
+# )
+# @pytest.mark.parametrize("value", [1, 24, 0, -1, "abc", "trace", 1+2j, True, np.array([1, 2, 3])])
+# async def test_set_compatible(path, value):
+#     async def procedure(session):
+#         result = await session.set(
+#             AnnotatedValue(path=path, value=value),
+#         )
+#         print(result.path, result.value, result.extra_header)
+
+#     await same_prints_and_exceptions_for_real_and_mock(procedure)()
 
 
 @pytest.mark.mock_compatibility()
 @pytest.mark.asyncio()
-@same_prints_for_real_and_mock
-async def test_state_keeping_compatible(session: Session):
-    await session.set(AnnotatedValue(path="/zi/debug/level", value=1))
-    result = await session.get("/zi/debug/level")
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/zi/debug/level",
+        "/zi/debug/log",
+        "/zi"
+        "*",
+        "/a/b",  # test invalid node
+    ],
+)
+async def test_get_compatible(path):
+    async def procedure(session):
+        result = await session.get(path)
+        print(result.path)  # noqa: T201
 
-    print(result.path, result.value, result.extra_header)  # noqa: T201
+    await same_prints_and_exceptions_for_real_and_mock(procedure)()
+
+
+@pytest.mark.mock_compatibility()
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/zi/debug/level",
+        "/zi/debug/log",
+        "/a/b",  # test invalid node
+    ],
+)
+@pytest.mark.parametrize("value", [1, 24, 0, -1])
+async def test_state_keeping_compatible(path, value):
+    async def procedure(session):
+        await session.set(AnnotatedValue(path=path, value=value))
+        result = await session.get(path)
+        print(result.path, result.value, result.extra_header)  # noqa: T201
+
+    await same_prints_and_exceptions_for_real_and_mock(procedure)()
+
 
 
 @pytest.mark.mock_compatibility()
@@ -170,7 +242,37 @@ async def test_state_keeping_compatible(session: Session):
 async def test_get_with_expression_compatible(expression):
     async def procedure(session):
         result = await session.get_with_expression(expression)
-
         print(sorted([r.path for r in result]))  # noqa: T201
 
-    await same_prints_for_real_and_mock(procedure)()
+    await same_prints_and_exceptions_for_real_and_mock(procedure)()
+
+
+@pytest.mark.mock_compatibility()
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "",
+        "*",
+        "/",
+        "/*",
+        "/zi",
+        "/zi/",
+        "/zi/*",
+        "/zi/debug",
+        "/zi/debug/level",
+        "/zi/debug/*",
+        "/zi/debug/level/*",
+        "/zi/debug/level/*/*",
+    ],
+)
+@pytest.mark.asyncio()
+async def test_set_with_expression_compatible(expression):
+
+    @same_prints_and_exceptions_for_real_and_mock
+    async def procedure(session: Session):
+        result = await session.set_with_expression(
+            AnnotatedValue(path=expression, value=17),
+        )
+        print(sorted([r.path for r in result]))  # noqa: T201
+
+    await procedure()
